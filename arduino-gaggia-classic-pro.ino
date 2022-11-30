@@ -117,8 +117,10 @@ void loop() {
       /* Handle wait mode */
       break;
 		case READY:
-			handleInputs(POTENTIOMETER);
-			handleInputs(ROTARY_ENCODER);
+			potentiometerHandler();
+			rotaryEncoderHandler();
+
+			setPumpVoltage();
 
 			if (isPrimaryButtonPressed) {
         // startShot();
@@ -128,32 +130,13 @@ void loop() {
       }
 			break;
 		case IN_USE:
-			handleOutputs(PWM_VOLTAGE_OUT);
+			// setPumpVoltage();
 
 			if (isSecondaryButtonPressed) {
 				//stopShot();
 			}
       break;
   }
-}
-
-void handleInputs(enum INPUTS inputType) {
-	switch(inputType) {
-		case POTENTIOMETER:
-			potentiometerHandler();
-			break;
-		case ROTARY_ENCODER:
-			rotaryEncoderHandler();
-			break;
-	}
-}
-
-void handleOutputs(enum OUTPUTS outputType) {
-	switch(outputType) {
-		case PWM_VOLTAGE_OUT:
-			setPumpVoltage();
-			break;
-	}
 }
 
 void potentiometerHandler() {

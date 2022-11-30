@@ -1,6 +1,6 @@
 {
-    "port": "/dev/tty.usbmodem21301",
-    "board": "arduino:avr:uno",
-    "programmer": "avrisp",
-    "sketch": "v0_09_gaggia-classic/v0_09_gaggia-classic.ino"
+  "port": "/dev/tty.usbmodem21301",
+  "board": "arduino:avr:uno",
+  "programmer": "avrisp",
+  "sketch": "arduino-gaggia-classic-pro/arduino-gaggia-classic-pro.ino"
 }
