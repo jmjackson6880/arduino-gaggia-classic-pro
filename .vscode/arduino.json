@@ -2,5 +2,5 @@
   "port": "/dev/tty.usbmodem21301",
   "board": "arduino:avr:uno",
   "programmer": "avrisp",
-  "sketch": "arduino-gaggia-classic-pro/arduino-gaggia-classic-pro.ino"
+  "sketch": "arduino-gaggia-classic-pro.ino"
 }
