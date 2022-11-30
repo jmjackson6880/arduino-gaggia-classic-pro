@@ -1,0 +1,23 @@
+{
+  "arduino.useArduinoCli": true,
+  "arduino.path": "/opt/homebrew/bin/",
+  "arduino.commandPath": "arduino-cli",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "cSpell.words": [
+    "Adafruit",
+    "Breastcancer",
+    "charid",
+    "Ellapsedin",
+    "Gaggia",
+    "millis",
+    "PEIWSOT"
+  ],
+  "files.associations": {
+    "atomic": "cpp",
+    "bitset": "cpp"
+  }
+}
