@@ -1,4 +1,4 @@
-# Arduino Project: Gaggia Classic Pro Mod
+# Arduino project: Gaggia Classic Pro mod
 
 Just another gratuitous project for technically-minded coffee snobs and giant nerds.
 
@@ -8,11 +8,11 @@ This mod takes the dimmer kit a few steps further by introducing an Arduino as a
 
 There are other similar projects out there. [Google "gaggiuino"](https://www.google.com/search?rlz=1C5CHFA_enUS841US841&sxsrf=ALiCzsbGp50YCr51Wm168XTbH1bHXEwS2Q:1669829448061&q=gaggiuino&spell=1&sa=X&ved=2ahUKEwiw7di4t9b7AhU2FFkFHTD4DLwQBSgAegQIBRAB&biw=1902&bih=1373&dpr=1) for more inspiration.
 
-## Warnings & Disclaimers
+## Warnings & disclaimers
 
-This project requires a strong baseline knowledge of programming, electricity, and microcontrollers. Implementing these modifications requires working with dangerous mainline voltages at 110/220 volts, and will include the modification of wiring. Destroyed electronics, shocks, fires, injury and death are possible. Make sure you know what you're doing.
+This project requires at least foundational knowledge of programming, electricity, and microcontrollers. Implementing these modifications requires working with dangerous mainline voltages at 110/220 volts and will include the modification of wiring. You will need to use your own knwoledge to determine Destroyed electronics, shocks, fires, injury and death are possible. Make sure you know what you're doing.
 
-## Components
+## Component to pin mapping
 
 | Component             | Pin     |
 | --------------------- | ------- |
@@ -27,6 +27,18 @@ This project requires a strong baseline knowledge of programming, electricity, a
 | 110 Voltage Output    | 9 (PWM) |
 | 20x4 LCD Screen       | --      |
 
+## Components & costs
+
+- Arduino (Examples built using Nano and Uno)
+- 20x4 RGB LCD Screen
+- PWM 110/220 Dimmer: Option A, Option B
+- Rotary Encoder
+- Potentiometer
+- Button
+- 110v AC to 5V DC Converter
+
+Total costs for these items should total around $X.XX USD. You will also need tools and shop supplies that you may or may not already own. Electrical tools (cutters, strippers, multimeter), soldering iron, wire, connectors, shrink tube will be necessary to have on hand.
+
 ## Circuit
 
 TO DO
@@ -38,3 +50,43 @@ TO DO
 - [Basic Encoder](https://www.arduinolibraries.info/libraries/basic-encoder)
 
 In the `.vscode` directory, you'll find some extensions that may be helpful if you are developing in VS Code. Further configuration specific to your OS will be required.
+
+## Demos
+
+TBD
+
+## Changing Modes
+
+TBD
+
+## Manual mode
+
+TBD
+
+### Flow control
+
+TBD
+
+## Automatic mode
+
+TBD
+
+### Selecting a profile
+
+TBD
+
+### Setting shot time
+
+TBD
+
+### Brewing
+
+TBD
+
+### Stop
+
+TBD
+
+## Reset shot timer
+
+TBD

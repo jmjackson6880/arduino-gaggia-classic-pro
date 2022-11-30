@@ -6,7 +6,6 @@
     "mpty.pack-arduino",
     "ronaldosena.arduino-snippets",
     "ms-vscode.cpptools",
-    "ms-vscode.cpptools-extension-pack",
     "pejmannikram.vscode-auto-scroll"
   ],
   // List of extensions recommended by VS Code that should not be recommended for users of this workspace.
