@@ -51,42 +51,50 @@ TO DO
 
 In the `.vscode` directory, you'll find some extensions that may be helpful if you are developing in VS Code. Further configuration specific to your OS will be required.
 
-## Demos
+## Documentation & demos
+
+This section will contain basic documentation on how the code and components work.
+
+### Device Status
+
+| Status           			|
+| --------------------- |
+| STARTING_UP         	|
+| READY         				|
+| IN_USE         				|
+| WAIT         					|
+
+### Modes
+
+| Modes          				|
+| --------------------- |
+| MANUAL        				|
+| AUTOMATIC         		|
+
+### Brewing: Manual mode
 
 TBD
 
-## Changing Modes
+### Brewing: Automatic mode
 
 TBD
 
-## Manual mode
+#### Profiles
 
 TBD
 
-### Flow control
+#### Setting a shot time
 
 TBD
 
-## Automatic mode
+#### Brewing
 
 TBD
 
-### Selecting a profile
+#### Stop
 
 TBD
 
-### Setting shot time
-
-TBD
-
-### Brewing
-
-TBD
-
-### Stop
-
-TBD
-
-## Reset shot timer
+### Clear last shot time
 
 TBD

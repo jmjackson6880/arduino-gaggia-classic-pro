@@ -128,7 +128,7 @@ void setup()
 
 void loop()
 {
-	// Create a throttled functional loop
+	// Throttled
 	//
 	CURRENT_TIMESTAMP = millis();
 
@@ -139,8 +139,10 @@ void loop()
 	}
 	//
 
+	// Timers
 	START_UP_TIMER.tick();
 
+	// Loop based on CURRENT_DEVICE_STATUS
 	switch (CURRENT_DEVICE_STATUS)
 	{
 	case STARTING_UP:
