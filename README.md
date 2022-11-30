@@ -2,9 +2,9 @@
 
 Just another gratuitous project for technically-minded coffee snobs and giant nerds.
 
-This project builds off of the amazing (https://www.shadesofcoffee.co.uk/)[Shades of Coffee] mods for the Gaggia Classic Pro. Specifically, the addition of an (https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic-pro2019-pid-kit---132din-single-display)[upgraded temperature sensor and PID] for precise control of brew and steam temperatures, as well as the (https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic---flow-control-dimmer-kit)[flow control dimmer kit]. This mod takes the dimmer kit a few steps further by introducing an Arduino as a microcontroller along with a series of sensors and output devices. Together, these components provide the functionality necessary for the user to select and load a pressure profile, set a shot time, and push the "start" button. Or, the user has the option to operate the machine manually using a flow control knob.
+This project builds off of the amazing [https://www.shadesofcoffee.co.uk/](Shades of Coffee) mods for the Gaggia Classic Pro. Specifically, the addition of an [https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic-pro2019-pid-kit---132din-single-display](upgraded temperature sensor and PID) for precise control of brew and steam temperatures, as well as the [https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic---flow-control-dimmer-kit](flow control dimmer kit). This mod takes the dimmer kit a few steps further by introducing an Arduino as a microcontroller along with a series of sensors and output devices. Together, these components provide the functionality necessary for the user to select and load a pressure profile, set a shot time, and push the "start" button. Or, the user has the option to operate the machine manually using a flow control knob.
 
-There are other similar projects out there. (https://www.google.com/search?rlz=1C5CHFA_enUS841US841&sxsrf=ALiCzsbGp50YCr51Wm168XTbH1bHXEwS2Q:1669829448061&q=gaggiuino&spell=1&sa=X&ved=2ahUKEwiw7di4t9b7AhU2FFkFHTD4DLwQBSgAegQIBRAB&biw=1902&bih=1373&dpr=1)[Google "gaggiuino"] for more inspiration.
+There are other similar projects out there. [https://www.google.com/search?rlz=1C5CHFA_enUS841US841&sxsrf=ALiCzsbGp50YCr51Wm168XTbH1bHXEwS2Q:1669829448061&q=gaggiuino&spell=1&sa=X&ved=2ahUKEwiw7di4t9b7AhU2FFkFHTD4DLwQBSgAegQIBRAB&biw=1902&bih=1373&dpr=1](Google "gaggiuino") for more inspiration.
 
 ## Warnings & Disclaimers
 
@@ -27,8 +27,12 @@ This project requires a strong baseline knowledge of programming, electricity, a
 
 ## Circuit
 
+TO DO
+
 ## Libraries & Dependencies
 
-- Arduino
-- Ardunio Timer
-- Basic Encoder
+- [https://docs.arduino.cc/](Arduino)
+- [https://www.arduinolibraries.info/libraries/arduino-timer](Arduino Timer)
+- [https://www.arduinolibraries.info/libraries/basic-encoder](Basic Encoder)
+
+In the `.vscode` directory, you'll find some extensions that may be helpful if you are developing in VS Code. Further configuration specific to your OS will be required.
