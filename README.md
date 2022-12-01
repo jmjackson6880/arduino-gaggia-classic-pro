@@ -29,16 +29,17 @@ This project requires at least foundational knowledge of programming, electricit
 
 ## Components & costs
 
-- Arduino (Examples built using Nano and Uno)
-- 20x4 RGB LCD Screen
-- PWM 110/220 Dimmer: Option A, Option B
-- Rotary Encoder
-- Potentiometer
-- Button
-- 110v AC to 5V DC Converter
+List of example components required and estimated costs. 
 
-Total costs for these items should total around $X.XX USD. You will also need tools and shop supplies that you may or may not already own. Electrical tools (cutters, strippers, multimeter), soldering iron, wire, connectors, shrink tube will be necessary to have on hand.
+- [Arduino](https://store-usa.arduino.cc/collections/boards) (Examples built using Nano and Uno)
+- [RGB backlight negative LCD 20x4](https://www.adafruit.com/product/498#technical-details)
+- PWM 110/220 Dimmer: [Option A](https://www.amazon.com/gp/product/B0BC297G4B/ref=ppx_yo_dt_b_asin_title_o08_s00?ie=UTF8&th=1), [Option B](https://www.amazon.com/gp/product/B06Y1DT1WP/ref=ppx_yo_dt_b_asin_title_o02_s00?ie=UTF8&psc=1)
+- [Rotary Encoder](https://www.adafruit.com/product/377)
+- [Potentiometer](https://www.adafruit.com/product/1789)
+- [Button](https://www.adafruit.com/product/559) (Qty 2)
+- [110v AC to 5V DC Converter](https://www.amazon.com/gp/product/B07YXN8J6R/ref=ppx_yo_dt_b_asin_title_o06_s02?ie=UTF8&th=1)
 
+Expect that the total cost for these items will fall between $75-95 USD. You will also need tools and shop supplies that you may or may not already own. Electrical tools (cutters, strippers, multimeter), soldering iron, wire, connectors, resistors, and shrink tube will be necessary to have on hand.
 ## Circuit
 
 TO DO
@@ -66,7 +67,7 @@ Device status is managed within in the Arduino codebase.
 
 ### Modes
 
-To toggle the mode, press the rotary encoder. 
+To toggle the mode, press the rotary encoder button. 
 
 | Modes          				|
 | --------------------- |
@@ -75,11 +76,11 @@ To toggle the mode, press the rotary encoder.
 
 ### Brewing: Manual mode
 
-To change the mode, press the rotary encoder. Observe that the mode will change on the LCD screen.
+To change the mode, press the rotary encoder button. Observe that the mode will change on the LCD screen.
 
 #### Flow control
 
-The mode must be "Manual". To start a manually flow-controlled shot, turn the potentiometer to the left limit, then begin dialing to the right. Observe that the shot time will begin counting on the LCD screen and that voltage is being increasingly applied to the pump. To stop the stop, return the potentiometer to the left limit.
+The mode must be "Manual". To start a manually flow-controlled shot, turn the potentiometer to the left limit, then begin dialing to the right. The pump will not start unless the potentiometer is returned to the left limit. Observe that the shot time will begin counting on the LCD screen and that voltage is being increasingly applied to the pump. To stop the shot, return the potentiometer to the left limit.
 
 ### Brewing: Automatic mode
 
