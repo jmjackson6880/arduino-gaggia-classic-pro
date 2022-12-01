@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <arduino-timer.h>
+#include <BasicEncoder.h>
 
 // Cases to catch
 // If switch to manual, make sure pot is turned CCW/does not send volts
@@ -88,14 +89,9 @@ int PWM_VOLTAGE_OUT_VALUE = 0;
 int PWM_VOLTAGE_OUT_MIN_VALUE = 0;
 int PWM_VOLTAGE_OUT_MAX_VALUE = 255;
 
-#define ROTARY_ENCODER_PIN A1
+BasicEncoder RotaryEncoder(12, 13);
 int ROTARY_ENCODER_VALUE;
 int ROTARY_ENCODER_PREV_VALUE = 0;
-int ROTARY_ENCODER_AMOUNT_VALUE_CHANGED = 0;
-int ROTARY_ENCODER_VALUE_CHANGE_THRESHOLD = 50;
-
-#define ROTARY_ENCODER_PIN_L 3
-#define ROTARY_ENCODER_PIN_C 5
 
 #define PRIMARY_BUTTON_LED_PIN 4
 #define SECONDARY_BUTTON_LED_PIN 7
@@ -105,8 +101,6 @@ int ROTARY_ENCODER_VALUE_CHANGE_THRESHOLD = 50;
 // Primary Button
 
 // Secondary Button
-
-int x = 0, y = 0;
 
 void setup()
 {
@@ -141,6 +135,8 @@ void loop()
 
 	// Timers
 	START_UP_TIMER.tick();
+
+	RotaryEncoder.service();
 
 	// Loop based on CURRENT_DEVICE_STATUS
 	switch (CURRENT_DEVICE_STATUS)
@@ -210,15 +206,23 @@ void rotaryEncoderButtonHandler()
 
 void rotaryEncoderHandler()
 {
-	ROTARY_ENCODER_VALUE = analogRead(ROTARY_ENCODER_PIN);
-	ROTARY_ENCODER_AMOUNT_VALUE_CHANGED = abs(ROTARY_ENCODER_VALUE - ROTARY_ENCODER_PREV_VALUE);
+	int rotaryEncoderChange = RotaryEncoder.get_change();
 
-	// Serial.println(ROTARY_ENCODER_VALUE);
-
-	if (ROTARY_ENCODER_AMOUNT_VALUE_CHANGED >= ROTARY_ENCODER_VALUE_CHANGE_THRESHOLD)
+	if (rotaryEncoderChange)
 	{
-		// Serial.println("UPDATING: Rotary Encoder threshold reached ... ");
-		//
+		ROTARY_ENCODER_VALUE = RotaryEncoder.get_count();
+
+		if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
+		{
+			Serial.println("UPDATING: Rotary Encoder moved CW ... ");
+			//
+		}
+		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
+		{
+			Serial.println("UPDATING: Rotary Encoder moved CCW ... ");
+			//
+		}
+
 		ROTARY_ENCODER_PREV_VALUE = ROTARY_ENCODER_VALUE;
 	}
 }
@@ -380,6 +384,9 @@ void _throttled()
 	Serial.println("  ");
 	Serial.print("  ROTARY_ENCODER_BUTTON_VALUE: ");
 	Serial.print(ROTARY_ENCODER_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
+	Serial.println("  ");
+	Serial.print("  ROTARY_ENCODER_VALUE: ");
+	Serial.print(ROTARY_ENCODER_VALUE);
 	Serial.println("  ");
 	Serial.print("  PRIMARY_BUTTON_VALUE: ");
 	Serial.print(PRIMARY_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
