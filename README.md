@@ -53,9 +53,9 @@ In the `.vscode` directory, you'll find some extensions that may be helpful if y
 
 ## Documentation & demos
 
-This section will contain basic documentation on how the code and components work.
-
 ### Device Status
+
+Device status is managed within in the Arduino codebase.
 
 | Status           			|
 | --------------------- |
@@ -66,6 +66,8 @@ This section will contain basic documentation on how the code and components wor
 
 ### Modes
 
+To toggle the mode, press the rotary encoder. 
+
 | Modes          				|
 | --------------------- |
 | MANUAL        				|
@@ -73,28 +75,33 @@ This section will contain basic documentation on how the code and components wor
 
 ### Brewing: Manual mode
 
-TBD
+To change the mode, press the rotary encoder. Observe that the mode will change on the LCD screen.
+
+#### Flow control
+
+The mode must be "Manual". To start a manually flow-controlled shot, turn the potentiometer to the left limit, then begin dialing to the right. Observe that the shot time will begin counting on the LCD screen and that voltage is being increasingly applied to the pump. To stop the stop, return the potentiometer to the left limit.
 
 ### Brewing: Automatic mode
 
-TBD
+To change the mode, press the rotary encoder. Observe that the mode will change on the LCD screen.
 
 #### Profiles
 
-TBD
+The mode must be "Automatic". To set the profile, turn the rotary encoder. Observe that the profile will change on the LCD screen.
 
 #### Setting a shot time
 
-TBD
+The mode must be "Automatic". To set the shot time, turn the potentiometer. Observe that the shot time will change on the LCD screen. Shot times can be selected between the device minimum (7 secs) and maximum (91 secs).
 
 #### Brewing
 
-TBD
+The device status must be "Ready". To start a brew, press the Primary button.  Observe that the shot timer will begin counting on the LCD screen and that pump voltage will be applied relative to the current Profile selected for the duration of the selected shot time. When the brew time has expired, the timer and pump voltage will stop, then the device will enter "Wait" status for a few seconds, returning to "Ready".
 
 #### Stop
 
-TBD
+The device status must be "In Use". To stop an in-progress brew, press the secondary button. Observe that the pump voltage and shot time counter on the LCD screen will stop. The device will then enter "Wait" status for a few seconds, returning to "Ready".
+
 
 ### Clear last shot time
 
-TBD
+The device status must be "Ready". To clear the last shot time on the screen (optional), press the secondary button. Observe that the shot time displayed on the LCD screen has reset to zero.
