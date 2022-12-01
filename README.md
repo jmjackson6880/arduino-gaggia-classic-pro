@@ -2,7 +2,7 @@
 
 Just another gratuitous project for technically-minded coffee snobs and giant nerds.
 
-This project builds off of the amazing and well-documented [Shades of Coffee](https://www.shadesofcoffee.co.uk/) mods for the Gaggia Classic Pro. Specifically, the addition of an [upgraded temperature sensor and PID](https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic-pro2019-pid-kit---132din-single-display) for precise control of brew and steam temperatures, as well as the [flow control dimmer kit](https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic---flow-control-dimmer-kit).
+This project builds off of the amazing and well-documented [Shades of Coffee](https://www.shadesofcoffee.co.uk/) mods for the [Gaggia Classic Pro](https://www.gaggia.com/manual-machines/new-classic/). Specifically, the addition of an [upgraded temperature sensor and PID](https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic-pro2019-pid-kit---132din-single-display) for precise control of brew and steam temperatures, as well as the [flow control dimmer kit](https://www.shadesofcoffee.co.uk/post-2018/gaggia-classic---flow-control-dimmer-kit).
 
 This mod takes the dimmer kit a few steps further by introducing an Arduino as a microcontroller along with a series of sensors and output devices. Together, these components provide the functionality necessary for the user to select and load a pressure profile, set a shot time, and push the "start" button. Or, the user has the option to operate the machine manually using a flow control knob.
 
@@ -12,7 +12,7 @@ There are other similar projects out there. [Google "gaggiuino"](https://www.goo
 
 This project requires at least foundational knowledge of programming, electricity, and microcontrollers. Implementing these modifications requires working with dangerous mainline voltages at 110/220 volts and will include the modification of wiring. You will need to use your own knowledge and experience to determine the best way to make these modifications. Destroyed electronics, shocks, fires, injury and death are possible. Make sure you know what you're doing.
 
-## Component to pin mapping
+## Pin mapping
 
 | Component             | Pin     |
 | --------------------- | ------- |
