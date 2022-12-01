@@ -10,7 +10,7 @@ There are other similar projects out there. [Google "gaggiuino"](https://www.goo
 
 ## Warnings & disclaimers
 
-This project requires at least foundational knowledge of programming, electricity, and microcontrollers. Implementing these modifications requires working with dangerous mainline voltages at 110/220 volts and will include the modification of wiring. You will need to use your own knwoledge to determine Destroyed electronics, shocks, fires, injury and death are possible. Make sure you know what you're doing.
+This project requires at least foundational knowledge of programming, electricity, and microcontrollers. Implementing these modifications requires working with dangerous mainline voltages at 110/220 volts and will include the modification of wiring. You will need to use your own knowledge and experience to determine the best way to make these modifications. Destroyed electronics, shocks, fires, injury and death are possible. Make sure you know what you're doing.
 
 ## Component to pin mapping
 
