@@ -2,10 +2,6 @@
 #include <arduino-timer.h>
 #include <BasicEncoder.h>
 
-// Cases to catch
-// If switch to manual, make sure pot is turned CCW/does not send volts
-//
-
 enum INPUTS
 {
 	POTENTIOMETER,
@@ -96,12 +92,6 @@ int ROTARY_ENCODER_PREV_VALUE = 0;
 #define PRIMARY_BUTTON_LED_PIN 4
 #define SECONDARY_BUTTON_LED_PIN 7
 
-// Rotary Encoder
-
-// Primary Button
-
-// Secondary Button
-
 void setup()
 {
 	Serial.begin(9600);
@@ -133,9 +123,8 @@ void loop()
 	}
 	//
 
-	// Timers
+	// Managers
 	START_UP_TIMER.tick();
-
 	RotaryEncoder.service();
 
 	// Loop based on CURRENT_DEVICE_STATUS
@@ -153,8 +142,6 @@ void loop()
 	case READY:
 		potentiometerHandler();
 		rotaryEncoderHandler();
-
-		setPumpVoltage();
 
 		if (isPrimaryButtonPressed)
 		{
@@ -187,6 +174,7 @@ void potentiometerHandler()
 		//
 		POTENTIOMETER_PREV_VALUE = POTENTIOMETER_VALUE;
 		setShotTime();
+		setPumpVoltage();
 	}
 }
 
@@ -214,13 +202,15 @@ void rotaryEncoderHandler()
 
 		if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
 		{
-			Serial.println("UPDATING: Rotary Encoder moved CW ... ");
+			// Serial.println("UPDATING: Rotary Encoder moved CW ... ");
 			//
+			setProfile("r");
 		}
 		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
 		{
-			Serial.println("UPDATING: Rotary Encoder moved CCW ... ");
+			// Serial.println("UPDATING: Rotary Encoder moved CCW ... ");
 			//
+			setProfile("l");
 		}
 
 		ROTARY_ENCODER_PREV_VALUE = ROTARY_ENCODER_VALUE;
@@ -289,6 +279,28 @@ void setModeToManual()
 void setModeToAutomatic()
 {
 	USER_DEVICE_MODE = AUTOMATIC;
+}
+
+void setProfile(String dir)
+{
+	switch (USER_PROFILE)
+	{
+	case PROFILE_A:
+		USER_PROFILE = dir == "r" ? PROFILE_B : PROFILE_E;
+		break;
+	case PROFILE_B:
+		USER_PROFILE = dir == "r" ? PROFILE_C : PROFILE_A;
+		break;
+	case PROFILE_C:
+		USER_PROFILE = dir == "r" ? PROFILE_D : PROFILE_B;
+		break;
+	case PROFILE_D:
+		USER_PROFILE = dir == "r" ? PROFILE_E : PROFILE_C;
+		break;
+	case PROFILE_E:
+		USER_PROFILE = dir == "r" ? PROFILE_A : PROFILE_D;
+		break;
+	}
 }
 
 void setShotTime()
@@ -378,6 +390,10 @@ void _throttled()
 	Serial.print("  USER_SHOT_TIME: ");
 	Serial.print(USER_SHOT_TIME);
 	Serial.println("  ");
+	Serial.print("  PWM_VOLTAGE_OUT_VALUE: ");
+	Serial.print(PWM_VOLTAGE_OUT_VALUE);
+	Serial.println("  ");
+	/*
 	Serial.println("  ------  ");
 	Serial.print("  POTENTIOMETER_VALUE: ");
 	Serial.print(POTENTIOMETER_VALUE);
@@ -394,8 +410,6 @@ void _throttled()
 	Serial.print("  SECONDARY_BUTTON_VALUE: ");
 	Serial.print(SECONDARY_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
 	Serial.println("  ");
-	Serial.print("  PWM_VOLTAGE_OUT_VALUE: ");
-	Serial.print(PWM_VOLTAGE_OUT_VALUE);
-	Serial.println("  ");
+	*/
 	Serial.println("}");
 }

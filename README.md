@@ -111,4 +111,4 @@ The device status must be "In Use". To stop an in-progress brew, press the secon
 
 ### Clear last shot time
 
-The device status must be "Ready". To clear the last shot time on the screen (optional), press the secondary button. Observe that the shot time displayed on the LCD screen has reset to zero.
+The device status must be "Ready". To clear the last shot time on the screen (optional), press the secondary button. Observe that the shot time displayed on the LCD screen has reset to zero. This value will also clear on its own when the next brew starts, or when the machine is powered down. 
