@@ -12,6 +12,12 @@ There are other similar projects out there. [Google "gaggiuino"](https://www.goo
 
 This project requires at least foundational knowledge of programming, electricity, and microcontrollers. Implementing these modifications requires working with dangerous mainline voltages at 110/220 volts and will include the modification of wiring. You will need to use your own knowledge and experience to determine the best way to make these modifications. Destroyed electronics, shocks, fires, injury and death are possible. Make sure you know what you're doing.
 
+### Caveats
+
+If you don't have a PID installed on your machine, don't bother with this modification. Do that first.
+
+This is an assumption, but the exact performance of pressure profiles in this project is likely to differ from machine to machine. Age, condition, and versions of the machine will cause subtle differences between users, as will the exact performance and setup of your OVP value and springs. Expect to have to modify the pressure profiles to meet your machine. 
+
 ## Pin mapping
 
 | Component             | Pin     |

@@ -314,16 +314,16 @@ String getProfileName()
 	switch (USER_PROFILE)
 	{
 	case PROFILE_A:
-		return "10s pre-infuse @ 3.5";
+		return "Pre-infuse";
 		break;
 	case PROFILE_B:
-		return "Ramp up & down";
+		return "Ramp Up + Down";
 		break;
 	case PROFILE_C:
-		return "9 bar shot";
+		return "6 bar shot";
 		break;
 	case PROFILE_D:
-		return "6 bar shot";
+		return "9 bar shot";
 		break;
 	case PROFILE_E:
 		return "Turbo shot";
