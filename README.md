@@ -14,9 +14,9 @@ This project requires at least foundational knowledge of programming, electricit
 
 ### Caveats
 
-If you don't have a PID installed on your machine, don't bother with this modification. Do that first.
+If you don't have a PID installed on your machine, do not bother with this modification. Temperature control comes first.
 
-This is an assumption, but the exact performance of pressure profiles in this project is likely to differ from machine to machine. Age, condition, and versions of the machine will cause subtle differences between users, as will the exact performance and setup of your OVP value and springs. Expect to have to modify the pressure profiles to meet your machine. 
+This is an assumption, but the exact performance of pressure profiles in this project are likely to differ from machine to machine. Age, condition, and versions of the machine will cause subtle differences between users, as will the exact performance and setup of your OVP value / springs. Expect to have to tweak the pressure profile data points to meet your machine. 
 
 ## Pin mapping
 
