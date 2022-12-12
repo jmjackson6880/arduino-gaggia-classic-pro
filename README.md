@@ -42,7 +42,7 @@ List of example components required and estimated costs.
 - [Button](https://www.adafruit.com/product/559) (Qty 2)
 - [110v AC to 5V DC Converter](https://www.amazon.com/gp/product/B07YXN8J6R/ref=ppx_yo_dt_b_asin_title_o06_s02?ie=UTF8&th=1)
 
-Expect that the total cost for these items will fall between $75-95 USD. You can certainly source far more inexpensive components and achieve the same results. You will also need tools and shop supplies that you may or may not already own. Electrical tools (cutters, strippers, multimeter), soldering iron, wire, connectors, resistors, and shrink tube will be necessary to have on hand.
+Expect that the total cost for these items will fall between $75-95 USD. You can easily source more inexpensive components and achieve the same results. You will also need tools and shop supplies that you may or may not already own. Electrical tools (cutters, strippers, crimpers, multimeter), soldering iron, wire, connectors, resistors, and shrink tube will be necessary to have on hand.
 
 ### Pin mapping
 
