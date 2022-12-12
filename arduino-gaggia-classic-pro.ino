@@ -1,6 +1,10 @@
 #include <Arduino.h>
+#include "Adafruit_LiquidCrystal.h"
 #include <arduino-timer.h>
 #include <BasicEncoder.h>
+
+Adafruit_LiquidCrystal lcd(0);
+int32_t charid_string;
 
 enum INPUTS
 {
@@ -22,10 +26,12 @@ unsigned long CURRENT_TIMESTAMP = 0;
 unsigned long LAST_THROTTLE_TIMESTAMP = 0;
 unsigned long BUTTON_PRESSED_TIMESTAMP = 0;
 unsigned long BUTTON_PRESSED_PREV_TIMESTAMP = 0;
+unsigned long SHOT_START_TIMESTAMP = 0;
+unsigned long SHOT_CURRENT_TIMESTAMP = 0;
 
-// auto STOP_BREW_TIMER = timer_create_default();
-// auto BREW_TIMER = timer_create_default();
 auto START_UP_TIMER = timer_create_default();
+auto SHOT_TIMER = timer_create_default();
+auto WAIT_STATUS_TIMER = timer_create_default();
 
 enum DEVICE_STATUS
 {
@@ -50,6 +56,7 @@ int DEVICE_MIN_SHOT_TIME = 7;
 int DEVICE_MAX_SHOT_TIME = 91;
 
 int USER_SHOT_TIME = DEVICE_MIN_SHOT_TIME;
+int CURRENT_SHOT_TIME = 0;
 enum DEVICE_MODES
 {
 	MANUAL,
@@ -69,16 +76,18 @@ enum PUSH_BUTTON_STATES
 	IS_NOT_PRESSED
 };
 
-#define ROTARY_ENCODER_BUTTON_PIN 2
+#define ROTARY_ENCODER_BUTTON_PIN 5
 enum PUSH_BUTTON_STATES ROTARY_ENCODER_BUTTON_VALUE = IS_NOT_PRESSED;
 
-#define PRIMARY_BUTTON_PIN A2
+#define PRIMARY_BUTTON_PIN 2
+#define PRIMARY_BUTTON_LED_PIN 8
 enum PUSH_BUTTON_STATES PRIMARY_BUTTON_VALUE = IS_NOT_PRESSED;
-boolean isPrimaryButtonPressed = PRIMARY_BUTTON_VALUE == HIGH;
+boolean isPrimaryButtonPressed = PRIMARY_BUTTON_VALUE == IS_PRESSED;
 
-#define SECONDARY_BUTTON_PIN A3
+#define SECONDARY_BUTTON_PIN 3
+#define SECONDARY_BUTTON_LED_PIN 4
 enum PUSH_BUTTON_STATES SECONDARY_BUTTON_VALUE = IS_NOT_PRESSED;
-boolean isSecondaryButtonPressed = SECONDARY_BUTTON_VALUE == HIGH;
+boolean isSecondaryButtonPressed = SECONDARY_BUTTON_VALUE == IS_PRESSED;
 
 #define PWM_VOLTAGE_OUT_PIN 9
 int PWM_VOLTAGE_OUT_VALUE = 0;
@@ -89,12 +98,19 @@ BasicEncoder RotaryEncoder(12, 13);
 int ROTARY_ENCODER_VALUE;
 int ROTARY_ENCODER_PREV_VALUE = 0;
 
-#define PRIMARY_BUTTON_LED_PIN 4
-#define SECONDARY_BUTTON_LED_PIN 7
+#define LCD_BACKLIGHT_R_PIN 11
+#define LCD_BACKLIGHT_G_PIN 10
+#define LCD_BACKLIGHT_B_PIN 6
 
 void setup()
 {
 	Serial.begin(9600);
+
+	lcd.begin(20, 4);
+	lcd.clear();
+
+	lcd.setCursor(0, 0);
+	lcd.print("setup() ...");
 
 	START_TIMESTAMP = millis();
 	LAST_THROTTLE_TIMESTAMP = START_TIMESTAMP;
@@ -102,12 +118,19 @@ void setup()
 	setStatusToStartingUp();
 
 	pinMode(ROTARY_ENCODER_BUTTON_PIN, INPUT_PULLUP);
-	pinMode(PRIMARY_BUTTON_LED_PIN, OUTPUT);
-	pinMode(SECONDARY_BUTTON_LED_PIN, OUTPUT);
-
 	attachInterrupt(digitalPinToInterrupt(ROTARY_ENCODER_BUTTON_PIN), rotaryEncoderButtonHandler, CHANGE);
-	// attachInterrupt(digitalPinToInterrupt(PRIMARY_BUTTON_PIN), primaryButtonHandler, CHANGE);
-	// attachInterrupt(digitalPinToInterrupt(SECONDARY_BUTTON_PIN), secondaryButtonHandler, CHANGE);
+
+	pinMode(PRIMARY_BUTTON_PIN, INPUT_PULLUP);
+	pinMode(PRIMARY_BUTTON_LED_PIN, OUTPUT);
+	attachInterrupt(digitalPinToInterrupt(PRIMARY_BUTTON_PIN), primaryButtonHandler, CHANGE);
+
+	pinMode(SECONDARY_BUTTON_PIN, INPUT_PULLUP);
+	pinMode(SECONDARY_BUTTON_LED_PIN, OUTPUT);
+	attachInterrupt(digitalPinToInterrupt(SECONDARY_BUTTON_PIN), secondaryButtonHandler, CHANGE);
+
+	pinMode(LCD_BACKLIGHT_R_PIN, OUTPUT);
+	pinMode(LCD_BACKLIGHT_G_PIN, OUTPUT);
+	pinMode(LCD_BACKLIGHT_B_PIN, OUTPUT);
 }
 
 void loop()
@@ -121,10 +144,17 @@ void loop()
 		LAST_THROTTLE_TIMESTAMP = millis();
 		_throttled();
 	}
+
+	// LCD Backlight Test
 	//
+	//  analogWrite(LCD_BACKLIGHT_R_PIN, 50);
+	//  analogWrite(LCD_BACKLIGHT_G_PIN, 0);
+	//  analogWrite(LCD_BACKLIGHT_B_PIN, 50);
 
 	// Managers
 	START_UP_TIMER.tick();
+	SHOT_TIMER.tick();
+	WAIT_STATUS_TIMER.tick();
 	RotaryEncoder.service();
 
 	// Loop based on CURRENT_DEVICE_STATUS
@@ -142,23 +172,9 @@ void loop()
 	case READY:
 		potentiometerHandler();
 		rotaryEncoderHandler();
-
-		if (isPrimaryButtonPressed)
-		{
-			// startShot();
-		}
-		if (isSecondaryButtonPressed)
-		{
-			// clearLastShotTime();
-		}
 		break;
 	case IN_USE:
-		// setPumpVoltage();
-
-		if (isSecondaryButtonPressed)
-		{
-			// stopShot();
-		}
+		/* Handle in use */
 		break;
 	}
 }
@@ -173,8 +189,16 @@ void potentiometerHandler()
 		// Serial.println("UPDATING: Potentiometer threshold reached ... ");
 		//
 		POTENTIOMETER_PREV_VALUE = POTENTIOMETER_VALUE;
-		setShotTime();
-		setPumpVoltage();
+
+		switch (USER_DEVICE_MODE)
+		{
+		case MANUAL:
+			setPumpVoltage();
+			break;
+		case AUTOMATIC:
+			setShotTime();
+			break;
+		}
 	}
 }
 
@@ -183,7 +207,7 @@ void rotaryEncoderButtonHandler()
 	ROTARY_ENCODER_BUTTON_VALUE = (digitalRead(ROTARY_ENCODER_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
 	BUTTON_PRESSED_TIMESTAMP = millis();
 
-	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 1000)
+	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 500)
 	{
 		// Serial.println("UPDATING: Rotary Encoder Button is pressed ... ");
 		//
@@ -204,13 +228,13 @@ void rotaryEncoderHandler()
 		{
 			// Serial.println("UPDATING: Rotary Encoder moved CW ... ");
 			//
-			setProfile("r");
+			setProfile("next");
 		}
 		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
 		{
 			// Serial.println("UPDATING: Rotary Encoder moved CCW ... ");
 			//
-			setProfile("l");
+			setProfile("previous");
 		}
 
 		ROTARY_ENCODER_PREV_VALUE = ROTARY_ENCODER_VALUE;
@@ -222,11 +246,19 @@ void primaryButtonHandler()
 	PRIMARY_BUTTON_VALUE = (digitalRead(PRIMARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
 	BUTTON_PRESSED_TIMESTAMP = millis();
 
-	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 1000)
+	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 500)
 	{
-		// Serial.println("UPDATING: Primary Button is pressed ... ");
+		// Serial.println("UPDATING: Primary Button state has changed ... ");
 		//
 		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
+
+		switch (CURRENT_DEVICE_STATUS)
+		{
+		case READY:
+			setStatusToInUse();
+			startShot();
+			break;
+		}
 	}
 }
 
@@ -235,40 +267,56 @@ void secondaryButtonHandler()
 	SECONDARY_BUTTON_VALUE = (digitalRead(SECONDARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
 	BUTTON_PRESSED_TIMESTAMP = millis();
 
-	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 1000)
+	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 500)
 	{
-		// Serial.println("UPDATING: Secondary Button is pressed ... ");
+		// Serial.println("UPDATING: Secondary Button state has changed ... ");
 		//
 		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
+
+		switch (CURRENT_DEVICE_STATUS)
+		{
+		case IN_USE:
+			setStatusToWait();
+			stopShot();
+			break;
+		case READY:
+			clearLastShotTime();
+			break;
+		}
 	}
 }
 
 void setStatusToStartingUp()
 {
 	CURRENT_DEVICE_STATUS = STARTING_UP;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, LOW);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, LOW);
+	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
+	analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
 }
 
 void setStatusToReady()
 {
 	CURRENT_DEVICE_STATUS = READY;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, HIGH);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, HIGH);
+	analogWrite(PRIMARY_BUTTON_LED_PIN, 0);
+	analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
 }
 
 void setStatusToWait()
 {
 	CURRENT_DEVICE_STATUS = WAIT;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, LOW);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, LOW);
+	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
+	analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
+
+	WAIT_STATUS_TIMER.in(5000, [](void *argument) -> bool
+											 { 
+				setStatusToReady();
+        WAIT_STATUS_TIMER.cancel(); });
 }
 
 void setStatusToInUse()
 {
 	CURRENT_DEVICE_STATUS = IN_USE;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, LOW);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, HIGH);
+	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
+	analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
 }
 
 void setModeToManual()
@@ -286,19 +334,19 @@ void setProfile(String dir)
 	switch (USER_PROFILE)
 	{
 	case PROFILE_A:
-		USER_PROFILE = dir == "r" ? PROFILE_B : PROFILE_E;
+		USER_PROFILE = dir == "next" ? PROFILE_B : PROFILE_E;
 		break;
 	case PROFILE_B:
-		USER_PROFILE = dir == "r" ? PROFILE_C : PROFILE_A;
+		USER_PROFILE = dir == "next" ? PROFILE_C : PROFILE_A;
 		break;
 	case PROFILE_C:
-		USER_PROFILE = dir == "r" ? PROFILE_D : PROFILE_B;
+		USER_PROFILE = dir == "next" ? PROFILE_D : PROFILE_B;
 		break;
 	case PROFILE_D:
-		USER_PROFILE = dir == "r" ? PROFILE_E : PROFILE_C;
+		USER_PROFILE = dir == "next" ? PROFILE_E : PROFILE_C;
 		break;
 	case PROFILE_E:
-		USER_PROFILE = dir == "r" ? PROFILE_A : PROFILE_D;
+		USER_PROFILE = dir == "next" ? PROFILE_A : PROFILE_D;
 		break;
 	}
 }
@@ -321,15 +369,20 @@ void stopPumpVoltage()
 	analogWrite(PWM_VOLTAGE_OUT_PIN, PWM_VOLTAGE_OUT_VALUE);
 }
 
+void clearLastShotTime()
+{
+	CURRENT_SHOT_TIME = 0;
+}
+
 String getProfileName()
 {
 	switch (USER_PROFILE)
 	{
 	case PROFILE_A:
-		return "Pre-infuse";
+		return "3.5 bar pre-infuse";
 		break;
 	case PROFILE_B:
-		return "Ramp Up + Down";
+		return "Ramp up + down";
 		break;
 	case PROFILE_C:
 		return "6 bar shot";
@@ -375,6 +428,55 @@ String getStatusName()
 	}
 }
 
+void startShot()
+{
+	// Reset all timers + variables
+	//
+	SHOT_TIMER.cancel();
+	clearLastShotTime();
+	SHOT_START_TIMESTAMP = millis();
+
+	// Reference profile data
+	//
+	Serial.println("Load pressure profile data...");
+
+	// Status to In Use
+	//
+	setStatusToInUse();
+
+	// Start Shot timer, stop when expires
+	//
+	SHOT_TIMER.in((long)USER_SHOT_TIME * 1000, [](void *argument) -> bool
+								{
+    CURRENT_SHOT_TIME = USER_SHOT_TIME;
+    stopShot(); });
+
+	// Send initial volts to pump as determined by profile
+	//
+	Serial.println("Apply initial pump voltage...");
+
+	// Manage Shot data in loop while timer is active
+	SHOT_TIMER.every(250, [](void *argument) -> bool
+									 { 
+		SHOT_CURRENT_TIMESTAMP = millis();
+    int timeEllapsedinSecs = (SHOT_CURRENT_TIMESTAMP - SHOT_START_TIMESTAMP)/1000;
+
+    // Manage shot timer on screen
+    //
+    CURRENT_SHOT_TIME = timeEllapsedinSecs < USER_SHOT_TIME ? timeEllapsedinSecs : USER_SHOT_TIME;
+
+    // Update volts sent to pump as determined by profile
+    //
+    Serial.println("Modify pump voltage based on profile..."); });
+}
+
+void stopShot()
+{
+	setStatusToWait();
+	SHOT_TIMER.cancel();
+	stopPumpVoltage();
+}
+
 void _throttled()
 {
 	Serial.println("_throttled() ... {");
@@ -390,10 +492,12 @@ void _throttled()
 	Serial.print("  USER_SHOT_TIME: ");
 	Serial.print(USER_SHOT_TIME);
 	Serial.println("  ");
+	Serial.print("  CURRENT_SHOT_TIME: ");
+	Serial.print(CURRENT_SHOT_TIME);
+	Serial.println("  ");
 	Serial.print("  PWM_VOLTAGE_OUT_VALUE: ");
 	Serial.print(PWM_VOLTAGE_OUT_VALUE);
 	Serial.println("  ");
-	/*
 	Serial.println("  ------  ");
 	Serial.print("  POTENTIOMETER_VALUE: ");
 	Serial.print(POTENTIOMETER_VALUE);
@@ -410,6 +514,5 @@ void _throttled()
 	Serial.print("  SECONDARY_BUTTON_VALUE: ");
 	Serial.print(SECONDARY_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
 	Serial.println("  ");
-	*/
 	Serial.println("}");
 }
