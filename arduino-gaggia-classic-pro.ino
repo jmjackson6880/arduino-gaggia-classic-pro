@@ -68,7 +68,6 @@ enum DEVICE_MODES USER_DEVICE_MODE = MANUAL;
 float POTENTIOMETER_VALUE;
 float POTENTIOMETER_PREV_VALUE = 0;
 float POTENTIOMETER_AMOUNT_VALUE_CHANGED = 0;
-float POTENTIOMETER_VALUE_CHANGE_THRESHOLD = .01;
 
 enum PUSH_BUTTON_STATES
 {
@@ -183,11 +182,10 @@ void potentiometerHandler()
 {
 	POTENTIOMETER_VALUE = (float)analogRead(POTENTIOMETER_PIN) / 1024;
 	POTENTIOMETER_AMOUNT_VALUE_CHANGED = abs(POTENTIOMETER_VALUE - POTENTIOMETER_PREV_VALUE);
+	boolean potentiometerChangeHasExceededThreshold = POTENTIOMETER_AMOUNT_VALUE_CHANGED >= .01;
 
-	if (POTENTIOMETER_AMOUNT_VALUE_CHANGED >= POTENTIOMETER_VALUE_CHANGE_THRESHOLD)
+	if (potentiometerChangeHasExceededThreshold)
 	{
-		// Serial.println("UPDATING: Potentiometer threshold reached ... ");
-		//
 		POTENTIOMETER_PREV_VALUE = POTENTIOMETER_VALUE;
 
 		switch (USER_DEVICE_MODE)
@@ -206,11 +204,10 @@ void rotaryEncoderButtonHandler()
 {
 	ROTARY_ENCODER_BUTTON_VALUE = (digitalRead(ROTARY_ENCODER_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
 	BUTTON_PRESSED_TIMESTAMP = millis();
+	boolean isButtonDebounceComplete = (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP) > 1000;
 
-	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 500)
+	if (isButtonDebounceComplete)
 	{
-		// Serial.println("UPDATING: Rotary Encoder Button is pressed ... ");
-		//
 		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
 		USER_DEVICE_MODE = USER_DEVICE_MODE == MANUAL ? AUTOMATIC : MANUAL;
 	}
@@ -219,21 +216,19 @@ void rotaryEncoderButtonHandler()
 void rotaryEncoderHandler()
 {
 	int rotaryEncoderChange = RotaryEncoder.get_change();
+	boolean rotaryEncoderValueHasIncreased = ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE;
+	boolean rotaryEncoderValueHasDecreased = ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE;
 
 	if (rotaryEncoderChange)
 	{
 		ROTARY_ENCODER_VALUE = RotaryEncoder.get_count();
 
-		if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
+		if (rotaryEncoderValueHasIncreased)
 		{
-			// Serial.println("UPDATING: Rotary Encoder moved CW ... ");
-			//
 			setProfile("next");
 		}
-		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
+		else if (rotaryEncoderValueHasDecreased)
 		{
-			// Serial.println("UPDATING: Rotary Encoder moved CCW ... ");
-			//
 			setProfile("previous");
 		}
 
@@ -245,11 +240,10 @@ void primaryButtonHandler()
 {
 	PRIMARY_BUTTON_VALUE = (digitalRead(PRIMARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
 	BUTTON_PRESSED_TIMESTAMP = millis();
+	boolean isButtonDebounceComplete = (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP) > 500;
 
-	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 500)
+	if (isButtonDebounceComplete)
 	{
-		// Serial.println("UPDATING: Primary Button state has changed ... ");
-		//
 		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
 
 		switch (CURRENT_DEVICE_STATUS)
@@ -266,11 +260,10 @@ void secondaryButtonHandler()
 {
 	SECONDARY_BUTTON_VALUE = (digitalRead(SECONDARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
 	BUTTON_PRESSED_TIMESTAMP = millis();
+	boolean isButtonDebounceComplete = (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP) > 500;
 
-	if (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP > 500)
+	if (isButtonDebounceComplete)
 	{
-		// Serial.println("UPDATING: Secondary Button state has changed ... ");
-		//
 		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
 
 		switch (CURRENT_DEVICE_STATUS)
@@ -357,6 +350,14 @@ void setShotTime()
 	USER_SHOT_TIME = (float)POTENTIOMETER_VALUE * allowedShotTimeRange + DEVICE_MIN_SHOT_TIME;
 }
 
+void updateShotTimer()
+{
+	SHOT_CURRENT_TIMESTAMP = millis();
+	int timeEllapsedinSecs = (SHOT_CURRENT_TIMESTAMP - SHOT_START_TIMESTAMP) / 1000;
+
+	CURRENT_SHOT_TIME = timeEllapsedinSecs < USER_SHOT_TIME ? timeEllapsedinSecs : USER_SHOT_TIME;
+}
+
 void setPumpVoltage()
 {
 	PWM_VOLTAGE_OUT_VALUE = POTENTIOMETER_VALUE >= .01 ? (float)POTENTIOMETER_VALUE * 255 + 1 : 0;
@@ -430,51 +431,35 @@ String getStatusName()
 
 void startShot()
 {
-	// Reset all timers + variables
-	//
-	SHOT_TIMER.cancel();
-	clearLastShotTime();
 	SHOT_START_TIMESTAMP = millis();
 
-	// Reference profile data
-	//
-	Serial.println("Load pressure profile data...");
-
-	// Status to In Use
-	//
+	clearLastShotTime();
 	setStatusToInUse();
+	setPumpVoltage(); // min, based on profile
 
-	// Start Shot timer, stop when expires
-	//
-	SHOT_TIMER.in((long)USER_SHOT_TIME * 1000, [](void *argument) -> bool
-								{
-    CURRENT_SHOT_TIME = USER_SHOT_TIME;
-    stopShot(); });
+	SHOT_TIMER.in((long)USER_SHOT_TIME * 1000, handleShotTimerExpire);
+	SHOT_TIMER.every(250, handleShotUpdates);
+}
 
-	// Send initial volts to pump as determined by profile
-	//
-	Serial.println("Apply initial pump voltage...");
+bool handleShotUpdates(void *argument)
+{
+	setPumpVoltage(); // update, based on timeline + profile
+	updateShotTimer();
+	return true;
+}
 
-	// Manage Shot data in loop while timer is active
-	SHOT_TIMER.every(250, [](void *argument) -> bool
-									 { 
-		SHOT_CURRENT_TIMESTAMP = millis();
-    int timeEllapsedinSecs = (SHOT_CURRENT_TIMESTAMP - SHOT_START_TIMESTAMP)/1000;
-
-    // Manage shot timer on screen
-    //
-    CURRENT_SHOT_TIME = timeEllapsedinSecs < USER_SHOT_TIME ? timeEllapsedinSecs : USER_SHOT_TIME;
-
-    // Update volts sent to pump as determined by profile
-    //
-    Serial.println("Modify pump voltage based on profile..."); });
+bool handleShotTimerExpire(void *argument)
+{
+	CURRENT_SHOT_TIME = USER_SHOT_TIME;
+	stopShot();
+	return false;
 }
 
 void stopShot()
 {
 	setStatusToWait();
-	SHOT_TIMER.cancel();
 	stopPumpVoltage();
+	SHOT_TIMER.cancel();
 }
 
 void _throttled()
