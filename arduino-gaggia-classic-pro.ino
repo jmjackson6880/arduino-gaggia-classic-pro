@@ -1,29 +1,14 @@
 #include <Arduino.h>
-#include "Adafruit_LiquidCrystal.h"
-#include <arduino-timer.h>
 #include <BasicEncoder.h>
+#include <arduino-timer.h>
+#include <movingAvg.h>
+#include "Wire.h"
+#include "Adafruit_LiquidCrystal.h"
 
-Adafruit_LiquidCrystal lcd(0);
-int32_t charid_string;
-
-enum INPUTS
-{
-	POTENTIOMETER,
-	ROTARY_ENCODER_BUTTON,
-	ROTARY_ENCODER,
-	PRIMARY_BUTTON,
-	SECONDARY_BUTTON
-};
-enum OUTPUTS
-{
-	PRIMARY_BUTTON_LED,
-	SECONDARY_BUTTON_LED,
-	PWM_VOLTAGE_OUT
-};
+String DEVICE_BUILD_VERSION = "0.9";
+String DEVICE_NAME = "Gaggia Classic Pro";
 
 unsigned long START_TIMESTAMP = 0;
-unsigned long CURRENT_TIMESTAMP = 0;
-unsigned long LAST_THROTTLE_TIMESTAMP = 0;
 unsigned long BUTTON_PRESSED_TIMESTAMP = 0;
 unsigned long BUTTON_PRESSED_PREV_TIMESTAMP = 0;
 unsigned long SHOT_START_TIMESTAMP = 0;
@@ -32,6 +17,7 @@ unsigned long SHOT_CURRENT_TIMESTAMP = 0;
 auto START_UP_TIMER = timer_create_default();
 auto SHOT_TIMER = timer_create_default();
 auto WAIT_STATUS_TIMER = timer_create_default();
+auto LOOP_DEBOUNCED = timer_create_default();
 
 enum DEVICE_STATUS
 {
@@ -65,9 +51,9 @@ enum DEVICE_MODES
 enum DEVICE_MODES USER_DEVICE_MODE = MANUAL;
 
 #define POTENTIOMETER_PIN A0
-float POTENTIOMETER_VALUE;
-float POTENTIOMETER_PREV_VALUE = 0;
-float POTENTIOMETER_AMOUNT_VALUE_CHANGED = 0;
+int POTENTIOMETER_VALUE;
+int POTENTIOMETER_RAW_VALUE;
+movingAvg POTENTIOMETER_AVERAGE_VALUE(20);
 
 enum PUSH_BUTTON_STATES
 {
@@ -97,6 +83,16 @@ BasicEncoder RotaryEncoder(12, 13);
 int ROTARY_ENCODER_VALUE;
 int ROTARY_ENCODER_PREV_VALUE = 0;
 
+#define LCD_RS_PIN A5
+#define LCD_EN_PIN A4
+#define LCD_DB4_PIN A3
+#define LCD_DB5_PIN A2
+#define LCD_DB6_PIN A1
+#define LCD_DB7_PIN 7
+
+Adafruit_LiquidCrystal lcd(LCD_RS_PIN, LCD_EN_PIN, LCD_DB4_PIN, LCD_DB5_PIN, LCD_DB6_PIN, LCD_DB7_PIN);
+int32_t charid_string;
+
 #define LCD_BACKLIGHT_R_PIN 11
 #define LCD_BACKLIGHT_G_PIN 10
 #define LCD_BACKLIGHT_B_PIN 6
@@ -105,19 +101,7 @@ void setup()
 {
 	Serial.begin(9600);
 
-	lcd.begin(20, 4);
-	lcd.clear();
-
-	lcd.setCursor(0, 0);
-	lcd.print("setup() ...");
-
-	START_TIMESTAMP = millis();
-	LAST_THROTTLE_TIMESTAMP = START_TIMESTAMP;
-
-	setStatusToStartingUp();
-
 	pinMode(ROTARY_ENCODER_BUTTON_PIN, INPUT_PULLUP);
-	attachInterrupt(digitalPinToInterrupt(ROTARY_ENCODER_BUTTON_PIN), rotaryEncoderButtonHandler, CHANGE);
 
 	pinMode(PRIMARY_BUTTON_PIN, INPUT_PULLUP);
 	pinMode(PRIMARY_BUTTON_LED_PIN, OUTPUT);
@@ -130,33 +114,24 @@ void setup()
 	pinMode(LCD_BACKLIGHT_R_PIN, OUTPUT);
 	pinMode(LCD_BACKLIGHT_G_PIN, OUTPUT);
 	pinMode(LCD_BACKLIGHT_B_PIN, OUTPUT);
+
+	lcd.begin(20, 4);
+	setInitialScreen();
+
+	START_TIMESTAMP = millis();
+	LOOP_DEBOUNCED.every(1, debouncedLoop);
+	POTENTIOMETER_AVERAGE_VALUE.begin();
+
+	setStatusToStartingUp();
 }
 
 void loop()
 {
-	// Throttled
-	//
-	CURRENT_TIMESTAMP = millis();
-
-	if ((CURRENT_TIMESTAMP - LAST_THROTTLE_TIMESTAMP) >= 2000)
-	{
-		LAST_THROTTLE_TIMESTAMP = millis();
-		_throttled();
-	}
-
-	// LCD Backlight Test
-	//
-	//  analogWrite(LCD_BACKLIGHT_R_PIN, 50);
-	//  analogWrite(LCD_BACKLIGHT_G_PIN, 0);
-	//  analogWrite(LCD_BACKLIGHT_B_PIN, 50);
-
-	// Managers
 	START_UP_TIMER.tick();
 	SHOT_TIMER.tick();
 	WAIT_STATUS_TIMER.tick();
-	RotaryEncoder.service();
+	LOOP_DEBOUNCED.tick();
 
-	// Loop based on CURRENT_DEVICE_STATUS
 	switch (CURRENT_DEVICE_STATUS)
 	{
 	case STARTING_UP:
@@ -166,37 +141,54 @@ void loop()
         START_UP_TIMER.cancel(); });
 		break;
 	case WAIT:
-		/* Handle wait mode */
 		break;
 	case READY:
-		potentiometerHandler();
+		// rotaryEncoderButtonHandler();
 		rotaryEncoderHandler();
 		break;
 	case IN_USE:
-		/* Handle in use */
 		break;
 	}
+
+	if (CURRENT_DEVICE_STATUS != STARTING_UP)
+	{
+		updateLcdDisplay();
+	}
+}
+
+void debouncedLoop()
+{
+	RotaryEncoder.service();
+	potentiometerHandler();
 }
 
 void potentiometerHandler()
 {
-	POTENTIOMETER_VALUE = (float)analogRead(POTENTIOMETER_PIN) / 1024;
-	POTENTIOMETER_AMOUNT_VALUE_CHANGED = abs(POTENTIOMETER_VALUE - POTENTIOMETER_PREV_VALUE);
-	boolean potentiometerChangeHasExceededThreshold = POTENTIOMETER_AMOUNT_VALUE_CHANGED >= .01;
+	POTENTIOMETER_RAW_VALUE = analogRead(POTENTIOMETER_PIN);
+	POTENTIOMETER_AVERAGE_VALUE.reading(POTENTIOMETER_RAW_VALUE);
+	int movingAverage = POTENTIOMETER_AVERAGE_VALUE.getAvg();
 
-	if (potentiometerChangeHasExceededThreshold)
+	if (movingAverage < 25)
 	{
-		POTENTIOMETER_PREV_VALUE = POTENTIOMETER_VALUE;
+		POTENTIOMETER_VALUE = 0;
+	}
+	else if (movingAverage > 925)
+	{
+		POTENTIOMETER_VALUE = 1024;
+	}
+	else
+	{
+		POTENTIOMETER_VALUE = ((float(movingAverage) - 25) / 900) * 1023;
+	}
 
-		switch (USER_DEVICE_MODE)
-		{
-		case MANUAL:
-			setPumpVoltage();
-			break;
-		case AUTOMATIC:
-			setShotTime();
-			break;
-		}
+	switch (USER_DEVICE_MODE)
+	{
+	case MANUAL:
+		setPumpVoltage();
+		break;
+	case AUTOMATIC:
+		setShotTime();
+		break;
 	}
 }
 
@@ -216,18 +208,16 @@ void rotaryEncoderButtonHandler()
 void rotaryEncoderHandler()
 {
 	int rotaryEncoderChange = RotaryEncoder.get_change();
-	boolean rotaryEncoderValueHasIncreased = ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE;
-	boolean rotaryEncoderValueHasDecreased = ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE;
 
 	if (rotaryEncoderChange)
 	{
 		ROTARY_ENCODER_VALUE = RotaryEncoder.get_count();
 
-		if (rotaryEncoderValueHasIncreased)
+		if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
 		{
 			setProfile("next");
 		}
-		else if (rotaryEncoderValueHasDecreased)
+		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
 		{
 			setProfile("previous");
 		}
@@ -279,18 +269,109 @@ void secondaryButtonHandler()
 	}
 }
 
+void setInitialScreen()
+{
+	lcd.setCursor(0, 0);
+	lcd.print(DEVICE_NAME);
+
+	lcd.setCursor(0, 1);
+	lcd.print("--------------------");
+
+	lcd.setCursor(0, 2);
+	lcd.print(getStatusName() + "...");
+
+	lcd.setCursor(0, 3);
+	lcd.print("Build version: " + DEVICE_BUILD_VERSION);
+}
+
+void updateLcdDisplay()
+{
+	lcd.setCursor(0, 0);
+	lcd.print("---- Timer: ");
+
+	lcd.setCursor(12, 0);
+	lcd.print((CURRENT_SHOT_TIME < 10) ? '0' + String(CURRENT_SHOT_TIME) : String(CURRENT_SHOT_TIME));
+
+	lcd.setCursor(16, 0);
+	lcd.print("----");
+
+	lcd.setCursor(0, 1);
+	lcd.print(getModeName());
+
+	if (USER_DEVICE_MODE == MANUAL)
+	{
+		setLcdForManualMode();
+	}
+	else
+	{
+		setLcdForAutomaticMode();
+	}
+}
+
+void setLcdForManualMode()
+{
+	int pumpVoltageAsPercentage = ((float)PWM_VOLTAGE_OUT_VALUE / 255) * 100;
+
+	lcd.setCursor(0, 2);
+	lcd.print("                    ");
+
+	lcd.setCursor(0, 3);
+	lcd.print("---- Pump: ");
+
+	lcd.setCursor(11, 3);
+	lcd.print(String(pumpVoltageAsPercentage) + "%  ");
+
+	lcd.setCursor(16, 3);
+	lcd.print("----");
+}
+
+void setLcdForAutomaticMode()
+{
+	lcd.setCursor(0, 2);
+	lcd.print(getProfileName());
+
+	lcd.setCursor(0, 3);
+	lcd.print("-- Shot Time: ");
+
+	lcd.setCursor(15, 3);
+	lcd.print((USER_SHOT_TIME < 10) ? '0' + String(USER_SHOT_TIME) : String(USER_SHOT_TIME));
+
+	lcd.setCursor(18, 3);
+	lcd.print("--");
+}
+
 void setStatusToStartingUp()
 {
 	CURRENT_DEVICE_STATUS = STARTING_UP;
 	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
 	analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
+
+	analogWrite(LCD_BACKLIGHT_R_PIN, 0);
+	analogWrite(LCD_BACKLIGHT_G_PIN, 255);
+	analogWrite(LCD_BACKLIGHT_B_PIN, 255);
 }
 
 void setStatusToReady()
 {
+	lcd.clear();
+
 	CURRENT_DEVICE_STATUS = READY;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, 0);
 	analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
+
+	if (USER_DEVICE_MODE == MANUAL)
+	{
+		analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
+		analogWrite(LCD_BACKLIGHT_R_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_G_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_B_PIN, 0);
+	}
+	else
+	{
+		analogWrite(PRIMARY_BUTTON_LED_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_R_PIN, 255);
+		analogWrite(LCD_BACKLIGHT_G_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_B_PIN, 255);
+	}
 }
 
 void setStatusToWait()
@@ -298,6 +379,10 @@ void setStatusToWait()
 	CURRENT_DEVICE_STATUS = WAIT;
 	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
 	analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
+
+	analogWrite(LCD_BACKLIGHT_R_PIN, 0);
+	analogWrite(LCD_BACKLIGHT_G_PIN, 255);
+	analogWrite(LCD_BACKLIGHT_B_PIN, 255);
 
 	WAIT_STATUS_TIMER.in(5000, [](void *argument) -> bool
 											 { 
@@ -310,11 +395,17 @@ void setStatusToInUse()
 	CURRENT_DEVICE_STATUS = IN_USE;
 	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
 	analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
+
+	analogWrite(LCD_BACKLIGHT_R_PIN, 255);
+	analogWrite(LCD_BACKLIGHT_G_PIN, 255);
+	analogWrite(LCD_BACKLIGHT_B_PIN, 0);
 }
 
 void setModeToManual()
 {
 	USER_DEVICE_MODE = MANUAL;
+	stopPumpVoltage();
+	stopShot();
 }
 
 void setModeToAutomatic()
@@ -360,7 +451,7 @@ void updateShotTimer()
 
 void setPumpVoltage()
 {
-	PWM_VOLTAGE_OUT_VALUE = POTENTIOMETER_VALUE >= .01 ? (float)POTENTIOMETER_VALUE * 255 + 1 : 0;
+	PWM_VOLTAGE_OUT_VALUE = ((float)POTENTIOMETER_VALUE / 1024) * 255;
 	analogWrite(PWM_VOLTAGE_OUT_PIN, PWM_VOLTAGE_OUT_VALUE);
 }
 
@@ -380,19 +471,19 @@ String getProfileName()
 	switch (USER_PROFILE)
 	{
 	case PROFILE_A:
-		return "3.5 bar pre-infuse";
+		return "3.5 bar pre-infuse  ";
 		break;
 	case PROFILE_B:
-		return "Ramp up + down";
+		return "Ramp up + down      ";
 		break;
 	case PROFILE_C:
-		return "6 bar shot";
+		return "6 bar shot          ";
 		break;
 	case PROFILE_D:
-		return "9 bar shot";
+		return "9 bar shot          ";
 		break;
 	case PROFILE_E:
-		return "Turbo shot";
+		return "Turbo shot          ";
 		break;
 	}
 }
@@ -402,7 +493,7 @@ String getModeName()
 	switch (USER_DEVICE_MODE)
 	{
 	case MANUAL:
-		return "Manual";
+		return "Manual Mode";
 		break;
 	case AUTOMATIC:
 		return "Automatic";
@@ -460,44 +551,4 @@ void stopShot()
 	setStatusToWait();
 	stopPumpVoltage();
 	SHOT_TIMER.cancel();
-}
-
-void _throttled()
-{
-	Serial.println("_throttled() ... {");
-	Serial.print("  CURRENT_DEVICE_STATUS: ");
-	Serial.print(getStatusName());
-	Serial.println("  ");
-	Serial.print("  USER_DEVICE_MODE: ");
-	Serial.print(USER_DEVICE_MODE == MANUAL ? "Manual" : "Automatic");
-	Serial.println("  ");
-	Serial.print("  USER_PROFILE: ");
-	Serial.print(getProfileName());
-	Serial.println("  ");
-	Serial.print("  USER_SHOT_TIME: ");
-	Serial.print(USER_SHOT_TIME);
-	Serial.println("  ");
-	Serial.print("  CURRENT_SHOT_TIME: ");
-	Serial.print(CURRENT_SHOT_TIME);
-	Serial.println("  ");
-	Serial.print("  PWM_VOLTAGE_OUT_VALUE: ");
-	Serial.print(PWM_VOLTAGE_OUT_VALUE);
-	Serial.println("  ");
-	Serial.println("  ------  ");
-	Serial.print("  POTENTIOMETER_VALUE: ");
-	Serial.print(POTENTIOMETER_VALUE);
-	Serial.println("  ");
-	Serial.print("  ROTARY_ENCODER_BUTTON_VALUE: ");
-	Serial.print(ROTARY_ENCODER_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
-	Serial.println("  ");
-	Serial.print("  ROTARY_ENCODER_VALUE: ");
-	Serial.print(ROTARY_ENCODER_VALUE);
-	Serial.println("  ");
-	Serial.print("  PRIMARY_BUTTON_VALUE: ");
-	Serial.print(PRIMARY_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
-	Serial.println("  ");
-	Serial.print("  SECONDARY_BUTTON_VALUE: ");
-	Serial.print(SECONDARY_BUTTON_VALUE == IS_PRESSED ? "Pressed" : "Not Pressed");
-	Serial.println("  ");
-	Serial.println("}");
 }

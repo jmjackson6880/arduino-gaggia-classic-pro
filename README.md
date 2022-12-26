@@ -53,12 +53,16 @@ Expect that the total cost for these items will fall between $75-95 USD. You can
 | Rotary Encoder A      | 12      |
 | Rotary Encoder B      | 13      |
 | Primary Button        | 2      	|
-| Primary Button LED    | 7       |
+| Primary Button LED    | 8       |
 | Secondary Button      | 3      	|
 | Secondary Button LED  | 4       |
 | 110 Voltage Output    | 9				|
-| 20x4 LCD Screen       | --      |
-| 20x4 LCD Screen       | --      |
+| 20x4 LCD Screen RS    | A5      |
+| 20x4 LCD Screen       | A4      |
+| 20x4 LCD Screen       | A3      |
+| 20x4 LCD Screen       | A2      |
+| 20x4 LCD Screen       | A1      |
+| 20x4 LCD Screen       | 7      	|
 | LCD Backlight Red     | 11      |
 | LCD Backlight Green   | 10      |
 | LCD Backlight Blue    | 6      	|

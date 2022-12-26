@@ -16,7 +16,6 @@
  * LCD D5 pin to digital pin 4
  * LCD D6 pin to digital pin 3
  * LCD D7 pin to digital pin 2
- * LCD R/W pin to ground
  * 10K resistor:
  * ends to +5V and ground
  * wiper to LCD VO pin (pin 3)
@@ -27,28 +26,22 @@
  by Limor Fried (http://www.ladyada.net)
  example added 9 Jul 2009
  by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
- modified 7 Nov 2016
- by Arturo Guadalupi
+ modified 25 July 2009
+ by David A. Mellis
 
- This example code is in the public domain.
-
- http://www.arduino.cc/en/Tutorial/LiquidCrystalAutoscroll
-
-*/
+ http://www.arduino.cc/en/Tutorial/LiquidCrystal
+ */
 
 // include the library code:
-#include <LiquidCrystal.h>
+#include "Wire.h"
+#include "Adafruit_LiquidCrystal.h"
 
-// initialize the library by associating any needed LCD interface pin
-// with the arduino pin number it is connected to
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+// initialize the library with the numbers of the interface pins
+Adafruit_LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
 void setup() {
   // set up the LCD's number of columns and rows:
-  lcd.begin(16, 2);
+  lcd.begin(16,2);
 }
 
 void loop() {
@@ -56,12 +49,12 @@ void loop() {
   lcd.setCursor(0, 0);
   // print from 0 to 9:
   for (int thisChar = 0; thisChar < 10; thisChar++) {
-    lcd.print(thisChar);
-    delay(500);
+   lcd.print(thisChar);
+   delay(500);
   }
 
   // set the cursor to (16,1):
-  lcd.setCursor(16, 1);
+  lcd.setCursor(16,1);
   // set the display to automatically scroll:
   lcd.autoscroll();
   // print from 0 to 9:
