@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <BasicEncoder.h>
 #include <arduino-timer.h>
+#include <TimerOne.h>
 #include <movingAvg.h>
 #include "Wire.h"
 #include "Adafruit_LiquidCrystal.h"
@@ -115,24 +116,37 @@ void setup()
 	POTENTIOMETER_AVERAGE_VALUE.begin();
 	LOOP_OUTPUT.every(125, loopThrottled);
 
+	Timer1.initialize(1000);
+	Timer1.attachInterrupt(basicEncoderService);
+
 	lcd.begin(20, 4);
 	startupDeviceAndWait();
 
 	loopThrottled();
 }
 
+void basicEncoderService()
+{
+	RotaryEncoder.service();
+}
+
 void loop()
 {
+
+	int rotaryEncoderChange = RotaryEncoder.get_change();
+	if (rotaryEncoderChange)
+	{
+		inputRotaryEncoder();
+	}
+
 	WAIT_TIMER.tick();
 	LOOP_OUTPUT.tick();
 	SHOT_TIMER.tick();
-	RotaryEncoder.service();
 
 	inputPotentiometer();
 	inputPrimaryButton();
 	inputSecondaryButton();
 	inputRotaryEncoderButton();
-	inputRotaryEncoder();
 }
 
 void loopThrottled()
@@ -255,7 +269,7 @@ void outputLcdScreenRowThree()
 		else if (USER_DEVICE_MODE == AUTOMATIC)
 		{
 			lcd.setCursor(0, 2);
-			lcd.print((String)ROTARY_ENCODER_VALUE);
+			lcd.print(String(USER_PROFILE));
 		}
 	}
 }
@@ -436,23 +450,18 @@ void inputRotaryEncoderButton()
 
 void inputRotaryEncoder()
 {
-	int rotaryEncoderChange = RotaryEncoder.get_change();
+	ROTARY_ENCODER_VALUE = RotaryEncoder.get_count();
 
-	if (rotaryEncoderChange)
+	if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
 	{
-		ROTARY_ENCODER_VALUE = RotaryEncoder.get_count();
-
-		if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
-		{
-			setUserProfile("next");
-		}
-		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
-		{
-			setUserProfile("previous");
-		}
-
-		ROTARY_ENCODER_PREV_VALUE = ROTARY_ENCODER_VALUE;
+		setUserProfile("next");
 	}
+	else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
+	{
+		setUserProfile("previous");
+	}
+
+	ROTARY_ENCODER_PREV_VALUE = ROTARY_ENCODER_VALUE;
 }
 
 void startupDeviceAndWait()
