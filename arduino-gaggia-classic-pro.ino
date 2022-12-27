@@ -269,7 +269,7 @@ void outputLcdScreenRowThree()
 		else if (USER_DEVICE_MODE == AUTOMATIC)
 		{
 			lcd.setCursor(0, 2);
-			lcd.print(String(USER_PROFILE));
+			lcd.print(String(getUserProfileName()));
 		}
 	}
 }
@@ -452,11 +452,11 @@ void inputRotaryEncoder()
 {
 	ROTARY_ENCODER_VALUE = RotaryEncoder.get_count();
 
-	if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
+	if ((ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE) && CURRENT_DEVICE_STATUS == READY)
 	{
 		setUserProfile("next");
 	}
-	else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
+	else if ((ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE) && CURRENT_DEVICE_STATUS == READY)
 	{
 		setUserProfile("previous");
 	}
@@ -553,6 +553,56 @@ void setUserProfile(String dir)
 		break;
 	case PROFILE_E:
 		USER_PROFILE = dir == "next" ? PROFILE_A : PROFILE_D;
+		break;
+	}
+}
+
+String getUserProfileName()
+{
+	switch (USER_PROFILE)
+	{
+	case PROFILE_A:
+		return "Test volts to bar";
+		break;
+	case PROFILE_B:
+		return "9 bar + preinfusion";
+		break;
+	case PROFILE_C:
+		return "7 bar + preinfusion";
+		break;
+	case PROFILE_D:
+		return "Linear ramp up/down";
+		break;
+	case PROFILE_E:
+		return "Cubic ramp up/down";
+		break;
+	}
+
+	// 3.5 bar
+	// 7 bar
+	// 9 bar
+}
+
+int getUserProfilePressureDynamics()
+{
+	int profile[100];
+
+	switch (USER_PROFILE)
+	{
+	case PROFILE_A:
+		//
+		break;
+	case PROFILE_B:
+		//
+		break;
+	case PROFILE_C:
+		//
+		break;
+	case PROFILE_D:
+		//
+		break;
+	case PROFILE_E:
+		//
 		break;
 	}
 }
