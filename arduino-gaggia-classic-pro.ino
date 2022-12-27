@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <BasicEncoder.h>
+#include <movingAvg.h>
 #include <arduino-timer.h>
 #include <TimerOne.h>
-#include <movingAvg.h>
 #include "Wire.h"
 #include "Adafruit_LiquidCrystal.h"
 
@@ -98,6 +98,9 @@ enum LED_STATES PRIMARY_BUTTON_LED_VALUE = OFF;
 enum LED_STATES SECONDARY_BUTTON_LED_VALUE = OFF;
 
 Adafruit_LiquidCrystal lcd(LCD_RS_PIN, LCD_EN_PIN, LCD_DB4_PIN, LCD_DB5_PIN, LCD_DB6_PIN, LCD_DB7_PIN);
+
+// int values[8] = {0, .33, 1, .33, 0};
+// Easing easing(ease_mode::EASE_IN_OUT_CUBIC, 500);
 
 void setup()
 {
@@ -298,7 +301,9 @@ void outputLcdScreenRowFour()
 		{
 			lcd.setCursor(0, 3);
 			lcd.print(USER_SHOT_TIME);
-			lcd.print(" secs");
+			lcd.print(" secs / ");
+			lcd.print(pumpVoltageAsPercentage);
+			lcd.print("%");
 		}
 	}
 }
@@ -392,8 +397,15 @@ void inputPotentiometer()
 		POTENTIOMETER_VALUE = ((float(movingAverage) - 25) / 900) * 1023;
 	}
 
-	setAutomaticShotTimeValue();
-	setOutputVoltageValue();
+	if (CURRENT_DEVICE_STATUS == READY && USER_DEVICE_MODE == AUTOMATIC)
+	{
+		setAutomaticShotTimeValue();
+	}
+
+	if (USER_DEVICE_MODE == MANUAL && !OVERRIDE_PWM_VOLTAGE_OUT)
+	{
+		setOutputVoltageValue();
+	}
 }
 
 void inputPrimaryButton()
@@ -510,16 +522,7 @@ void setAutomaticShotTimeValue()
 
 void setOutputVoltageValue()
 {
-	if (USER_DEVICE_MODE == MANUAL)
-	{
-		PWM_VOLTAGE_OUT_VALUE = OVERRIDE_PWM_VOLTAGE_OUT ? 255 : ((float)POTENTIOMETER_VALUE / 1024) * 255;
-	}
-
-	if (USER_DEVICE_MODE == AUTOMATIC)
-	{
-		// Update Automatic based on profile selected
-		// PWM_VOLTAGE_OUT_VALUE = ?
-	}
+	PWM_VOLTAGE_OUT_VALUE = OVERRIDE_PWM_VOLTAGE_OUT ? 255 : ((float)POTENTIOMETER_VALUE / 1024) * 255;
 }
 
 void setUserDeviceMode()
@@ -577,34 +580,30 @@ String getUserProfileName()
 		return "Cubic ramp up/down";
 		break;
 	}
-
-	// 3.5 bar
-	// 7 bar
-	// 9 bar
 }
 
-int getUserProfilePressureDynamics()
+void startPressureProfileTimeline(long timelineInMs)
 {
-	int profile[100];
+	// Serial.println("startPressureProfileTimeline(" + String(timelineInMs) + ")");
 
-	switch (USER_PROFILE)
-	{
-	case PROFILE_A:
-		//
-		break;
-	case PROFILE_B:
-		//
-		break;
-	case PROFILE_C:
-		//
-		break;
-	case PROFILE_D:
-		//
-		break;
-	case PROFILE_E:
-		//
-		break;
-	}
+	// switch (USER_PROFILE)
+	// {
+	// case PROFILE_A:
+	// 	//
+	// 	break;
+	// case PROFILE_B:
+	// 	//
+	// 	break;
+	// case PROFILE_C:
+	// 	//
+	// 	break;
+	// case PROFILE_D:
+	// 	//
+	// 	break;
+	// case PROFILE_E:
+	// 	//
+	// 	break;
+	// }
 }
 
 void startShot()
@@ -627,20 +626,36 @@ void startShot()
 
 	if (USER_DEVICE_MODE == AUTOMATIC)
 	{
-		SHOT_TIMER.in((long)USER_SHOT_TIME * 1000, handleShotTimerExpire);
+
+		long userShotTimeInMs = USER_SHOT_TIME * 1000;
+		SHOT_TIMER.in(userShotTimeInMs, handleShotTimerExpire);
+
 		SHOT_TIMER.every(250, [](void *argument) -> bool
 										 {
 				SHOT_CURRENT_TIMESTAMP = millis();
 				int timeEllapsedinSecs = (SHOT_CURRENT_TIMESTAMP - SHOT_START_TIMESTAMP) / 1000;
 				CURRENT_SHOT_TIME = timeEllapsedinSecs < USER_SHOT_TIME ? timeEllapsedinSecs : USER_SHOT_TIME;
-				setOutputVoltageValue();
 				return true; });
+
+		// SHOT_TIMER.every(125, [](void *argument) -> bool
+		// 								 {
+		// 		Serial.println("Monitor shot profile");
+		// 		return true; });
 	}
 }
 
 void stopShot()
 {
-	OVERRIDE_PWM_VOLTAGE_OUT = false;
+	if (USER_DEVICE_MODE == MANUAL)
+	{
+		OVERRIDE_PWM_VOLTAGE_OUT = false;
+	}
+
+	if (USER_DEVICE_MODE == AUTOMATIC)
+	{
+		// stopPressureProfileTimeline();
+	}
+
 	pauseDeviceAndWait();
 	SHOT_TIMER.cancel();
 }
