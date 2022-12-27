@@ -5,28 +5,58 @@
 #include "Wire.h"
 #include "Adafruit_LiquidCrystal.h"
 
-String DEVICE_BUILD_VERSION = "0.9";
-String DEVICE_NAME = "Gaggia Classic Pro";
+#define PWM_VOLTAGE_OUT_PIN 9
+#define POTENTIOMETER_PIN A0
+#define ROTARY_ENCODER_BUTTON_PIN 5
+#define ROTARY_ENCODER_L_PIN 12
+#define ROTARY_ENCODER_R_PIN 13
+#define PRIMARY_BUTTON_PIN 2
+#define PRIMARY_BUTTON_LED_PIN 8
+#define SECONDARY_BUTTON_PIN 3
+#define SECONDARY_BUTTON_LED_PIN 4
+#define LCD_RS_PIN A5
+#define LCD_EN_PIN A4
+#define LCD_DB4_PIN A3
+#define LCD_DB5_PIN A2
+#define LCD_DB6_PIN A1
+#define LCD_DB7_PIN 7
+#define LCD_BACKLIGHT_R_PIN 11
+#define LCD_BACKLIGHT_G_PIN 10
+#define LCD_BACKLIGHT_B_PIN 6
 
-unsigned long START_TIMESTAMP = 0;
-unsigned long BUTTON_PRESSED_TIMESTAMP = 0;
-unsigned long BUTTON_PRESSED_PREV_TIMESTAMP = 0;
-unsigned long SHOT_START_TIMESTAMP = 0;
-unsigned long SHOT_CURRENT_TIMESTAMP = 0;
+int DEVICE_MIN_SHOT_TIME = 7;
+int DEVICE_MAX_SHOT_TIME = 90;
 
-auto START_UP_TIMER = timer_create_default();
+unsigned long TIMESTAMP_AT_START_UP = 0;
+
+// unsigned long SHOT_START_TIMESTAMP = 0;
+// unsigned long SHOT_CURRENT_TIMESTAMP = 0;
+
+int CURRENT_SHOT_TIME = 0;
+int USER_SHOT_TIME = DEVICE_MIN_SHOT_TIME;
+
+boolean INPUTS_DISABLED = false;
+
 auto SHOT_TIMER = timer_create_default();
-auto WAIT_STATUS_TIMER = timer_create_default();
-auto LOOP_DEBOUNCED = timer_create_default();
+auto WAIT_TIMER = timer_create_default();
+auto LOOP_OUTPUT = timer_create_default();
 
 enum DEVICE_STATUS
 {
 	STARTING_UP,
 	WAIT,
 	READY,
-	IN_USE
+	IN_USE,
+	ERROR
 };
-enum DEVICE_STATUS CURRENT_DEVICE_STATUS;
+enum DEVICE_STATUS CURRENT_DEVICE_STATUS = STARTING_UP;
+
+enum DEVICE_MODES
+{
+	MANUAL,
+	AUTOMATIC
+};
+enum DEVICE_MODES USER_DEVICE_MODE = MANUAL;
 
 enum DEVICE_PROFILES
 {
@@ -38,134 +68,292 @@ enum DEVICE_PROFILES
 };
 enum DEVICE_PROFILES USER_PROFILE = PROFILE_A;
 
-int DEVICE_MIN_SHOT_TIME = 7;
-int DEVICE_MAX_SHOT_TIME = 91;
-
-int USER_SHOT_TIME = DEVICE_MIN_SHOT_TIME;
-int CURRENT_SHOT_TIME = 0;
-enum DEVICE_MODES
-{
-	MANUAL,
-	AUTOMATIC
-};
-enum DEVICE_MODES USER_DEVICE_MODE = MANUAL;
-
-#define POTENTIOMETER_PIN A0
-int POTENTIOMETER_VALUE;
-int POTENTIOMETER_RAW_VALUE;
-movingAvg POTENTIOMETER_AVERAGE_VALUE(20);
-
 enum PUSH_BUTTON_STATES
 {
 	IS_PRESSED,
 	IS_NOT_PRESSED
 };
-
-#define ROTARY_ENCODER_BUTTON_PIN 5
 enum PUSH_BUTTON_STATES ROTARY_ENCODER_BUTTON_VALUE = IS_NOT_PRESSED;
-
-#define PRIMARY_BUTTON_PIN 2
-#define PRIMARY_BUTTON_LED_PIN 8
 enum PUSH_BUTTON_STATES PRIMARY_BUTTON_VALUE = IS_NOT_PRESSED;
-boolean isPrimaryButtonPressed = PRIMARY_BUTTON_VALUE == IS_PRESSED;
-
-#define SECONDARY_BUTTON_PIN 3
-#define SECONDARY_BUTTON_LED_PIN 4
 enum PUSH_BUTTON_STATES SECONDARY_BUTTON_VALUE = IS_NOT_PRESSED;
-boolean isSecondaryButtonPressed = SECONDARY_BUTTON_VALUE == IS_PRESSED;
 
-#define PWM_VOLTAGE_OUT_PIN 9
-int PWM_VOLTAGE_OUT_VALUE = 0;
-int PWM_VOLTAGE_OUT_MIN_VALUE = 0;
-int PWM_VOLTAGE_OUT_MAX_VALUE = 255;
+int POTENTIOMETER_VALUE = 0;
+int POTENTIOMETER_AVERAGE_PREV_VALUE = 0;
+movingAvg POTENTIOMETER_AVERAGE_VALUE(20);
 
-BasicEncoder RotaryEncoder(12, 13);
+BasicEncoder RotaryEncoder(ROTARY_ENCODER_L_PIN, ROTARY_ENCODER_R_PIN);
 int ROTARY_ENCODER_VALUE;
 int ROTARY_ENCODER_PREV_VALUE = 0;
 
-#define LCD_RS_PIN A5
-#define LCD_EN_PIN A4
-#define LCD_DB4_PIN A3
-#define LCD_DB5_PIN A2
-#define LCD_DB6_PIN A1
-#define LCD_DB7_PIN 7
+int PWM_VOLTAGE_OUT_VALUE = 0;
+
+enum LED_STATES
+{
+	ON,
+	OFF
+};
+enum LED_STATES PRIMARY_BUTTON_LED_VALUE = OFF;
+enum LED_STATES SECONDARY_BUTTON_LED_VALUE = OFF;
 
 Adafruit_LiquidCrystal lcd(LCD_RS_PIN, LCD_EN_PIN, LCD_DB4_PIN, LCD_DB5_PIN, LCD_DB6_PIN, LCD_DB7_PIN);
-int32_t charid_string;
-
-#define LCD_BACKLIGHT_R_PIN 11
-#define LCD_BACKLIGHT_G_PIN 10
-#define LCD_BACKLIGHT_B_PIN 6
 
 void setup()
 {
 	Serial.begin(9600);
 
 	pinMode(ROTARY_ENCODER_BUTTON_PIN, INPUT_PULLUP);
-
 	pinMode(PRIMARY_BUTTON_PIN, INPUT_PULLUP);
 	pinMode(PRIMARY_BUTTON_LED_PIN, OUTPUT);
-	attachInterrupt(digitalPinToInterrupt(PRIMARY_BUTTON_PIN), primaryButtonHandler, CHANGE);
-
 	pinMode(SECONDARY_BUTTON_PIN, INPUT_PULLUP);
 	pinMode(SECONDARY_BUTTON_LED_PIN, OUTPUT);
-	attachInterrupt(digitalPinToInterrupt(SECONDARY_BUTTON_PIN), secondaryButtonHandler, CHANGE);
-
 	pinMode(LCD_BACKLIGHT_R_PIN, OUTPUT);
 	pinMode(LCD_BACKLIGHT_G_PIN, OUTPUT);
 	pinMode(LCD_BACKLIGHT_B_PIN, OUTPUT);
 
-	lcd.begin(20, 4);
-	setInitialScreen();
-
-	START_TIMESTAMP = millis();
-	LOOP_DEBOUNCED.every(1, debouncedLoop);
+	TIMESTAMP_AT_START_UP = millis();
 	POTENTIOMETER_AVERAGE_VALUE.begin();
+	LOOP_OUTPUT.every(125, loopThrottled);
 
-	setStatusToStartingUp();
+	lcd.begin(20, 4);
+	startUpAndWait();
+
+	loopThrottled();
 }
 
 void loop()
 {
-	START_UP_TIMER.tick();
+	WAIT_TIMER.tick();
+	LOOP_OUTPUT.tick();
 	SHOT_TIMER.tick();
-	WAIT_STATUS_TIMER.tick();
-	LOOP_DEBOUNCED.tick();
+	RotaryEncoder.service();
 
+	inputPotentiometer();
+	inputPrimaryButton();
+	inputSecondaryButton();
+	inputRotaryEncoderButton();
+	inputRotaryEncoder();
+}
+
+void loopThrottled()
+{
+	outputLcdBgColor();
+	outputLcdScreenRowOne();
+	outputLcdScreenRowTwo();
+	outputLcdScreenRowThree();
+	outputLcdScreenRowFour();
+	outputVoltage();
+	outputPrimaryButtonLed();
+	outputSecondaryButtonLed();
+
+	observers();
+}
+
+void observers()
+{
+	boolean shouldStartManualBrew = ((USER_DEVICE_MODE == MANUAL) && (CURRENT_DEVICE_STATUS == READY) && (POTENTIOMETER_VALUE > 0) && (POTENTIOMETER_AVERAGE_PREV_VALUE == 0));
+	if (shouldStartManualBrew)
+	{
+		CURRENT_DEVICE_STATUS = IN_USE;
+		// startManualBrew();
+	}
+
+	boolean shouldStopManualBrew = ((USER_DEVICE_MODE == MANUAL) && (CURRENT_DEVICE_STATUS == IN_USE) && (POTENTIOMETER_VALUE == 0) && (POTENTIOMETER_AVERAGE_PREV_VALUE > 0));
+	if (shouldStopManualBrew)
+	{
+		stopAndWait();
+	}
+
+	POTENTIOMETER_AVERAGE_PREV_VALUE = POTENTIOMETER_VALUE;
+
+	boolean shouldThrowManualModeError = ((USER_DEVICE_MODE == MANUAL) && (CURRENT_DEVICE_STATUS == READY) && (PWM_VOLTAGE_OUT_VALUE > 0));
+	if (shouldThrowManualModeError)
+	{
+		CURRENT_DEVICE_STATUS = ERROR;
+	}
+
+	boolean shouldClearManualModeError = ((USER_DEVICE_MODE == MANUAL) && (CURRENT_DEVICE_STATUS == ERROR) && (PWM_VOLTAGE_OUT_VALUE == 0));
+	if (shouldClearManualModeError)
+	{
+		CURRENT_DEVICE_STATUS = READY;
+	}
+}
+
+void outputLcdScreenRowOne()
+{
+	lcd.setCursor(0, 0);
+	lcd.print("                    ");
+
+	if (CURRENT_DEVICE_STATUS == STARTING_UP)
+	{
+		lcd.setCursor(0, 0);
+		lcd.print("Gaggia Classic Pro");
+	}
+	else if (CURRENT_DEVICE_STATUS == READY || CURRENT_DEVICE_STATUS == IN_USE)
+	{
+		lcd.setCursor(0, 0);
+		lcd.print("Timer: ");
+		lcd.print(CURRENT_SHOT_TIME);
+	}
+	else if (CURRENT_DEVICE_STATUS == ERROR)
+	{
+		if (USER_DEVICE_MODE == MANUAL)
+		{
+			lcd.setCursor(0, 0);
+			lcd.print("Set pump to 0%!");
+		}
+	}
+}
+
+void outputLcdScreenRowTwo()
+{
+	lcd.setCursor(0, 1);
+	lcd.print("                    ");
+
+	if (CURRENT_DEVICE_STATUS == STARTING_UP)
+	{
+		lcd.setCursor(0, 1);
+		lcd.print("Starting up...");
+	}
+	else if (CURRENT_DEVICE_STATUS == READY || CURRENT_DEVICE_STATUS == IN_USE)
+	{
+		lcd.setCursor(0, 1);
+		lcd.print(USER_DEVICE_MODE == MANUAL ? "Manual / Ready" : "Automatic / Ready");
+	}
+	else if (CURRENT_DEVICE_STATUS == ERROR)
+	{
+		lcd.setCursor(0, 1);
+		lcd.print(USER_DEVICE_MODE == MANUAL ? "Manual / Error" : "Automatic / Error");
+	}
+}
+
+void outputLcdScreenRowThree()
+{
+	lcd.setCursor(0, 2);
+	lcd.print("                    ");
+
+	if (CURRENT_DEVICE_STATUS == STARTING_UP)
+	{
+		lcd.setCursor(0, 2);
+		lcd.print("Build version: 0.9");
+	}
+	else if (CURRENT_DEVICE_STATUS == READY || CURRENT_DEVICE_STATUS == IN_USE || CURRENT_DEVICE_STATUS == ERROR)
+	{
+		if (USER_DEVICE_MODE == MANUAL)
+		{
+			lcd.setCursor(0, 2);
+			lcd.print("Flow control knob");
+		}
+		else if (USER_DEVICE_MODE == AUTOMATIC)
+		{
+			lcd.setCursor(0, 2);
+			lcd.print((String)ROTARY_ENCODER_VALUE);
+		}
+	}
+}
+
+void outputLcdScreenRowFour()
+{
+	int pumpVoltageAsPercentage = ((float)PWM_VOLTAGE_OUT_VALUE / 255) * 100;
+
+	lcd.setCursor(0, 3);
+	lcd.print("                    ");
+
+	if (CURRENT_DEVICE_STATUS == STARTING_UP)
+	{
+		lcd.setCursor(0, 2);
+		lcd.print("Build version: 0.9");
+	}
+	else if (CURRENT_DEVICE_STATUS == READY || CURRENT_DEVICE_STATUS == ERROR || CURRENT_DEVICE_STATUS == IN_USE)
+	{
+		if (USER_DEVICE_MODE == MANUAL)
+		{
+			lcd.setCursor(0, 3);
+			lcd.print(pumpVoltageAsPercentage);
+			lcd.print("%");
+		}
+		else if (USER_DEVICE_MODE == AUTOMATIC)
+		{
+			lcd.setCursor(0, 3);
+			lcd.print(USER_SHOT_TIME);
+			lcd.print(" secs");
+		}
+	}
+}
+
+void outputLcdBgColor()
+{
 	switch (CURRENT_DEVICE_STATUS)
 	{
 	case STARTING_UP:
-		START_UP_TIMER.in(2000, [](void *argument) -> bool
-											{ 
-				setStatusToReady();
-        START_UP_TIMER.cancel(); });
+		analogWrite(LCD_BACKLIGHT_R_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_G_PIN, 150);
+		analogWrite(LCD_BACKLIGHT_B_PIN, 255);
 		break;
 	case WAIT:
+		analogWrite(LCD_BACKLIGHT_R_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_G_PIN, 150);
+		analogWrite(LCD_BACKLIGHT_B_PIN, 255);
 		break;
-	case READY:
-		// rotaryEncoderButtonHandler();
-		rotaryEncoderHandler();
+	case ERROR:
+		analogWrite(LCD_BACKLIGHT_R_PIN, 0);
+		analogWrite(LCD_BACKLIGHT_G_PIN, 255);
+		analogWrite(LCD_BACKLIGHT_B_PIN, 255);
 		break;
 	case IN_USE:
+		analogWrite(LCD_BACKLIGHT_R_PIN, 255);
+		analogWrite(LCD_BACKLIGHT_G_PIN, 255);
+		analogWrite(LCD_BACKLIGHT_B_PIN, 0);
+		break;
+	case READY:
+		if (USER_DEVICE_MODE == MANUAL)
+		{
+			analogWrite(LCD_BACKLIGHT_R_PIN, 255);
+			analogWrite(LCD_BACKLIGHT_G_PIN, 0);
+			analogWrite(LCD_BACKLIGHT_B_PIN, 0);
+		}
+		else if (USER_DEVICE_MODE == AUTOMATIC)
+		{
+			analogWrite(LCD_BACKLIGHT_R_PIN, 255);
+			analogWrite(LCD_BACKLIGHT_G_PIN, 0);
+			analogWrite(LCD_BACKLIGHT_B_PIN, 255);
+		}
 		break;
 	}
+}
 
-	if (CURRENT_DEVICE_STATUS != STARTING_UP)
+void outputVoltage()
+{
+	int value = CURRENT_DEVICE_STATUS == IN_USE ? PWM_VOLTAGE_OUT_VALUE : 0;
+	analogWrite(PWM_VOLTAGE_OUT_PIN, value);
+}
+
+void outputPrimaryButtonLed()
+{
+	if (CURRENT_DEVICE_STATUS == READY && USER_DEVICE_MODE == AUTOMATIC)
 	{
-		updateLcdDisplay();
+		analogWrite(PRIMARY_BUTTON_LED_PIN, 0);
+	}
+	else
+	{
+		analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
 	}
 }
 
-void debouncedLoop()
+void outputSecondaryButtonLed()
 {
-	RotaryEncoder.service();
-	potentiometerHandler();
+	if (CURRENT_DEVICE_STATUS != WAIT)
+	{
+		analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
+	}
+	else
+	{
+		analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
+	}
 }
 
-void potentiometerHandler()
+void inputPotentiometer()
 {
-	POTENTIOMETER_RAW_VALUE = analogRead(POTENTIOMETER_PIN);
-	POTENTIOMETER_AVERAGE_VALUE.reading(POTENTIOMETER_RAW_VALUE);
+	POTENTIOMETER_AVERAGE_VALUE.reading(analogRead(POTENTIOMETER_PIN));
 	int movingAverage = POTENTIOMETER_AVERAGE_VALUE.getAvg();
 
 	if (movingAverage < 25)
@@ -181,31 +369,44 @@ void potentiometerHandler()
 		POTENTIOMETER_VALUE = ((float(movingAverage) - 25) / 900) * 1023;
 	}
 
-	switch (USER_DEVICE_MODE)
+	setAutomaticShotTimeValue();
+	setOutputVoltageValue();
+}
+
+void inputPrimaryButton()
+{
+	PRIMARY_BUTTON_VALUE = (digitalRead(PRIMARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
+
+	if (PRIMARY_BUTTON_VALUE == IS_PRESSED && !INPUTS_DISABLED)
 	{
-	case MANUAL:
-		setPumpVoltage();
-		break;
-	case AUTOMATIC:
-		setShotTime();
-		break;
+		startInputDelay();
+		Serial.println("Primary");
 	}
 }
 
-void rotaryEncoderButtonHandler()
+void inputSecondaryButton()
+{
+	SECONDARY_BUTTON_VALUE = (digitalRead(SECONDARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
+
+	if (SECONDARY_BUTTON_VALUE == IS_PRESSED && !INPUTS_DISABLED)
+	{
+		startInputDelay();
+		Serial.println("Secondary");
+	}
+}
+
+void inputRotaryEncoderButton()
 {
 	ROTARY_ENCODER_BUTTON_VALUE = (digitalRead(ROTARY_ENCODER_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
-	BUTTON_PRESSED_TIMESTAMP = millis();
-	boolean isButtonDebounceComplete = (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP) > 1000;
 
-	if (isButtonDebounceComplete)
+	if (ROTARY_ENCODER_BUTTON_VALUE == IS_PRESSED && !INPUTS_DISABLED)
 	{
-		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
-		USER_DEVICE_MODE = USER_DEVICE_MODE == MANUAL ? AUTOMATIC : MANUAL;
+		startInputDelay();
+		setUserDeviceMode();
 	}
 }
 
-void rotaryEncoderHandler()
+void inputRotaryEncoder()
 {
 	int rotaryEncoderChange = RotaryEncoder.get_change();
 
@@ -215,205 +416,80 @@ void rotaryEncoderHandler()
 
 		if (ROTARY_ENCODER_VALUE > ROTARY_ENCODER_PREV_VALUE)
 		{
-			setProfile("next");
+			setUserProfile("next");
 		}
 		else if (ROTARY_ENCODER_VALUE < ROTARY_ENCODER_PREV_VALUE)
 		{
-			setProfile("previous");
+			setUserProfile("previous");
 		}
 
 		ROTARY_ENCODER_PREV_VALUE = ROTARY_ENCODER_VALUE;
 	}
 }
 
-void primaryButtonHandler()
-{
-	PRIMARY_BUTTON_VALUE = (digitalRead(PRIMARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
-	BUTTON_PRESSED_TIMESTAMP = millis();
-	boolean isButtonDebounceComplete = (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP) > 500;
-
-	if (isButtonDebounceComplete)
-	{
-		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
-
-		switch (CURRENT_DEVICE_STATUS)
-		{
-		case READY:
-			setStatusToInUse();
-			startShot();
-			break;
-		}
-	}
-}
-
-void secondaryButtonHandler()
-{
-	SECONDARY_BUTTON_VALUE = (digitalRead(SECONDARY_BUTTON_PIN) == 1) ? IS_PRESSED : IS_NOT_PRESSED;
-	BUTTON_PRESSED_TIMESTAMP = millis();
-	boolean isButtonDebounceComplete = (BUTTON_PRESSED_TIMESTAMP - BUTTON_PRESSED_PREV_TIMESTAMP) > 500;
-
-	if (isButtonDebounceComplete)
-	{
-		BUTTON_PRESSED_PREV_TIMESTAMP = BUTTON_PRESSED_TIMESTAMP;
-
-		switch (CURRENT_DEVICE_STATUS)
-		{
-		case IN_USE:
-			setStatusToWait();
-			stopShot();
-			break;
-		case READY:
-			clearLastShotTime();
-			break;
-		}
-	}
-}
-
-void setInitialScreen()
-{
-	lcd.setCursor(0, 0);
-	lcd.print(DEVICE_NAME);
-
-	lcd.setCursor(0, 1);
-	lcd.print("--------------------");
-
-	lcd.setCursor(0, 2);
-	lcd.print(getStatusName() + "...");
-
-	lcd.setCursor(0, 3);
-	lcd.print("Build version: " + DEVICE_BUILD_VERSION);
-}
-
-void updateLcdDisplay()
-{
-	lcd.setCursor(0, 0);
-	lcd.print("---- Timer: ");
-
-	lcd.setCursor(12, 0);
-	lcd.print((CURRENT_SHOT_TIME < 10) ? '0' + String(CURRENT_SHOT_TIME) : String(CURRENT_SHOT_TIME));
-
-	lcd.setCursor(16, 0);
-	lcd.print("----");
-
-	lcd.setCursor(0, 1);
-	lcd.print(getModeName());
-
-	if (USER_DEVICE_MODE == MANUAL)
-	{
-		setLcdForManualMode();
-	}
-	else
-	{
-		setLcdForAutomaticMode();
-	}
-}
-
-void setLcdForManualMode()
-{
-	int pumpVoltageAsPercentage = ((float)PWM_VOLTAGE_OUT_VALUE / 255) * 100;
-
-	lcd.setCursor(0, 2);
-	lcd.print("                    ");
-
-	lcd.setCursor(0, 3);
-	lcd.print("---- Pump: ");
-
-	lcd.setCursor(11, 3);
-	lcd.print(String(pumpVoltageAsPercentage) + "%  ");
-
-	lcd.setCursor(16, 3);
-	lcd.print("----");
-}
-
-void setLcdForAutomaticMode()
-{
-	lcd.setCursor(0, 2);
-	lcd.print(getProfileName());
-
-	lcd.setCursor(0, 3);
-	lcd.print("-- Shot Time: ");
-
-	lcd.setCursor(15, 3);
-	lcd.print((USER_SHOT_TIME < 10) ? '0' + String(USER_SHOT_TIME) : String(USER_SHOT_TIME));
-
-	lcd.setCursor(18, 3);
-	lcd.print("--");
-}
-
-void setStatusToStartingUp()
+void startUpAndWait()
 {
 	CURRENT_DEVICE_STATUS = STARTING_UP;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
 
-	analogWrite(LCD_BACKLIGHT_R_PIN, 0);
-	analogWrite(LCD_BACKLIGHT_G_PIN, 255);
-	analogWrite(LCD_BACKLIGHT_B_PIN, 255);
+	WAIT_TIMER.in(2000, [](void *argument) -> bool
+								{ 
+				CURRENT_DEVICE_STATUS = READY;
+        return false; });
 }
 
-void setStatusToReady()
-{
-	lcd.clear();
-
-	CURRENT_DEVICE_STATUS = READY;
-	analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
-
-	if (USER_DEVICE_MODE == MANUAL)
-	{
-		analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
-		analogWrite(LCD_BACKLIGHT_R_PIN, 0);
-		analogWrite(LCD_BACKLIGHT_G_PIN, 0);
-		analogWrite(LCD_BACKLIGHT_B_PIN, 0);
-	}
-	else
-	{
-		analogWrite(PRIMARY_BUTTON_LED_PIN, 0);
-		analogWrite(LCD_BACKLIGHT_R_PIN, 255);
-		analogWrite(LCD_BACKLIGHT_G_PIN, 0);
-		analogWrite(LCD_BACKLIGHT_B_PIN, 255);
-	}
-}
-
-void setStatusToWait()
+void stopAndWait()
 {
 	CURRENT_DEVICE_STATUS = WAIT;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, 255);
 
-	analogWrite(LCD_BACKLIGHT_R_PIN, 0);
-	analogWrite(LCD_BACKLIGHT_G_PIN, 255);
-	analogWrite(LCD_BACKLIGHT_B_PIN, 255);
-
-	WAIT_STATUS_TIMER.in(5000, [](void *argument) -> bool
-											 { 
-				setStatusToReady();
-        WAIT_STATUS_TIMER.cancel(); });
+	WAIT_TIMER.in(3000, [](void *argument) -> bool
+								{ 
+				CURRENT_DEVICE_STATUS = READY;
+        return false; });
 }
 
-void setStatusToInUse()
+void startInputDelay()
 {
-	CURRENT_DEVICE_STATUS = IN_USE;
-	analogWrite(PRIMARY_BUTTON_LED_PIN, 255);
-	analogWrite(SECONDARY_BUTTON_LED_PIN, 0);
-
-	analogWrite(LCD_BACKLIGHT_R_PIN, 255);
-	analogWrite(LCD_BACKLIGHT_G_PIN, 255);
-	analogWrite(LCD_BACKLIGHT_B_PIN, 0);
+	INPUTS_DISABLED = true;
+	WAIT_TIMER.in(1000, [](void *argument) -> bool
+								{ 
+				INPUTS_DISABLED = false;
+        return false; });
 }
 
-void setModeToManual()
+void setAutomaticShotTimeValue()
 {
-	USER_DEVICE_MODE = MANUAL;
-	stopPumpVoltage();
-	stopShot();
+	int allowedShotTimeRange = DEVICE_MAX_SHOT_TIME - DEVICE_MIN_SHOT_TIME;
+	USER_SHOT_TIME = (((float)POTENTIOMETER_VALUE / 1024) * (allowedShotTimeRange + DEVICE_MIN_SHOT_TIME));
+
+	if (USER_SHOT_TIME < DEVICE_MIN_SHOT_TIME)
+	{
+		USER_SHOT_TIME = DEVICE_MIN_SHOT_TIME;
+	}
+	else if (USER_SHOT_TIME > DEVICE_MAX_SHOT_TIME)
+	{
+		USER_SHOT_TIME = DEVICE_MAX_SHOT_TIME;
+	}
 }
 
-void setModeToAutomatic()
+void setOutputVoltageValue()
 {
-	USER_DEVICE_MODE = AUTOMATIC;
+	PWM_VOLTAGE_OUT_VALUE = ((float)POTENTIOMETER_VALUE / 1024) * 255;
 }
 
-void setProfile(String dir)
+void setUserDeviceMode()
+{
+	if (USER_DEVICE_MODE == MANUAL && (CURRENT_DEVICE_STATUS == READY || CURRENT_DEVICE_STATUS == ERROR))
+	{
+		CURRENT_DEVICE_STATUS = READY;
+		USER_DEVICE_MODE = AUTOMATIC;
+	}
+	else if (USER_DEVICE_MODE == AUTOMATIC && CURRENT_DEVICE_STATUS == READY)
+	{
+		USER_DEVICE_MODE = MANUAL;
+	}
+}
+
+void setUserProfile(String dir)
 {
 	switch (USER_PROFILE)
 	{
@@ -435,120 +511,54 @@ void setProfile(String dir)
 	}
 }
 
-void setShotTime()
-{
-	int allowedShotTimeRange = DEVICE_MAX_SHOT_TIME - DEVICE_MIN_SHOT_TIME;
-	USER_SHOT_TIME = (float)POTENTIOMETER_VALUE * allowedShotTimeRange + DEVICE_MIN_SHOT_TIME;
-}
+// void updateShotTimer()
+// {
+// 	SHOT_CURRENT_TIMESTAMP = millis();
+// 	int timeEllapsedinSecs = (SHOT_CURRENT_TIMESTAMP - SHOT_START_TIMESTAMP) / 1000;
 
-void updateShotTimer()
-{
-	SHOT_CURRENT_TIMESTAMP = millis();
-	int timeEllapsedinSecs = (SHOT_CURRENT_TIMESTAMP - SHOT_START_TIMESTAMP) / 1000;
+// 	CURRENT_SHOT_TIME = timeEllapsedinSecs < USER_SHOT_TIME ? timeEllapsedinSecs : USER_SHOT_TIME;
+// }
 
-	CURRENT_SHOT_TIME = timeEllapsedinSecs < USER_SHOT_TIME ? timeEllapsedinSecs : USER_SHOT_TIME;
-}
+// void stopPumpVoltage()
+// {
+// 	PWM_VOLTAGE_OUT_VALUE = 0;
+// 	analogWrite(PWM_VOLTAGE_OUT_PIN, PWM_VOLTAGE_OUT_VALUE);
+// }
 
-void setPumpVoltage()
-{
-	PWM_VOLTAGE_OUT_VALUE = ((float)POTENTIOMETER_VALUE / 1024) * 255;
-	analogWrite(PWM_VOLTAGE_OUT_PIN, PWM_VOLTAGE_OUT_VALUE);
-}
+// void clearLastShotTime()
+// {
+// 	CURRENT_SHOT_TIME = 0;
+// }
 
-void stopPumpVoltage()
-{
-	PWM_VOLTAGE_OUT_VALUE = 0;
-	analogWrite(PWM_VOLTAGE_OUT_PIN, PWM_VOLTAGE_OUT_VALUE);
-}
+// void startShot()
+// {
+// 	SHOT_START_TIMESTAMP = millis();
 
-void clearLastShotTime()
-{
-	CURRENT_SHOT_TIME = 0;
-}
+// 	clearLastShotTime();
+// 	setStatusToInUse();
+// 	setPumpVoltage(); // min, based on profile
 
-String getProfileName()
-{
-	switch (USER_PROFILE)
-	{
-	case PROFILE_A:
-		return "3.5 bar pre-infuse  ";
-		break;
-	case PROFILE_B:
-		return "Ramp up + down      ";
-		break;
-	case PROFILE_C:
-		return "6 bar shot          ";
-		break;
-	case PROFILE_D:
-		return "9 bar shot          ";
-		break;
-	case PROFILE_E:
-		return "Turbo shot          ";
-		break;
-	}
-}
+// 	SHOT_TIMER.in((long)USER_SHOT_TIME * 1000, handleShotTimerExpire);
+// 	SHOT_TIMER.every(250, handleShotUpdates);
+// }
 
-String getModeName()
-{
-	switch (USER_DEVICE_MODE)
-	{
-	case MANUAL:
-		return "Manual Mode";
-		break;
-	case AUTOMATIC:
-		return "Automatic";
-		break;
-	}
-}
+// bool handleShotUpdates(void *argument)
+// {
+// 	setPumpVoltage(); // update, based on timeline + profile
+// 	updateShotTimer();
+// 	return true;
+// }
 
-String getStatusName()
-{
-	switch (CURRENT_DEVICE_STATUS)
-	{
-	case STARTING_UP:
-		return "Starting up";
-		break;
-	case READY:
-		return "Ready";
-		break;
-	case WAIT:
-		return "Wait";
-		break;
-	case IN_USE:
-		return "In Use";
-		break;
-	}
-}
+// bool handleShotTimerExpire(void *argument)
+// {
+// 	CURRENT_SHOT_TIME = USER_SHOT_TIME;
+// 	stopShot();
+// 	return false;
+// }
 
-void startShot()
-{
-	SHOT_START_TIMESTAMP = millis();
-
-	clearLastShotTime();
-	setStatusToInUse();
-	setPumpVoltage(); // min, based on profile
-
-	SHOT_TIMER.in((long)USER_SHOT_TIME * 1000, handleShotTimerExpire);
-	SHOT_TIMER.every(250, handleShotUpdates);
-}
-
-bool handleShotUpdates(void *argument)
-{
-	setPumpVoltage(); // update, based on timeline + profile
-	updateShotTimer();
-	return true;
-}
-
-bool handleShotTimerExpire(void *argument)
-{
-	CURRENT_SHOT_TIME = USER_SHOT_TIME;
-	stopShot();
-	return false;
-}
-
-void stopShot()
-{
-	setStatusToWait();
-	stopPumpVoltage();
-	SHOT_TIMER.cancel();
-}
+// void stopShot()
+// {
+// 	setStatusToWait();
+// 	stopPumpVoltage();
+// 	SHOT_TIMER.cancel();
+// }
